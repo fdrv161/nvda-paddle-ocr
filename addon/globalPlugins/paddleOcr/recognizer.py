@@ -30,10 +30,10 @@ def languageName(lang):
 	return {"en": _("English"), "ru": _("Russian")}[lang]
 
 
-def getLanguage():
-	"""Выбранный язык; если не выбран — по языку NVDA, как у Windows OCR."""
+def getLanguage(auto=False):
+	"""Выбранный язык; если не выбран (или auto) — по языку NVDA, как у Windows OCR."""
 	lang = config.conf["paddleOcr"]["language"]
-	if lang in LANGUAGES:
+	if lang in LANGUAGES and not auto:
 		return lang
 	return "ru" if languageHandler.getLanguage().startswith("ru") else "en"
 
@@ -65,9 +65,14 @@ def _getEngine(lang):
 
 
 class PaddleOcr(ContentRecognizer):
-	allowAutoRefresh = False
-	# Пока нет настроек (этап 3), результат читаем сразу.
-	autoSayAllOnResult = True
+	# recogUi спрашивает эти свойства при каждом распознавании, так что настройки действуют сразу.
+	@property
+	def allowAutoRefresh(self):
+		return config.conf["paddleOcr"]["autoRefresh"]
+
+	@property
+	def autoSayAllOnResult(self):
+		return config.conf["paddleOcr"]["autoSayAllOnResult"]
 
 	def __init__(self):
 		# Метка текущего запроса: если запрос отменили, его результат молча выбрасываем.

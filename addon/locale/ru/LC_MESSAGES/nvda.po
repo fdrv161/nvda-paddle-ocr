@@ -1,0 +1,40 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: paddleOcr\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Paddle OCR"
+msgstr "Paddle OCR"
+
+msgid "Same as NVDA ({language})"
+msgstr "Как у NVDA ({language})"
+
+msgid "Recognition &language:"
+msgstr "&Язык распознавания:"
+
+msgid "Periodically &refresh recognized content"
+msgstr "Периодически &обновлять распознанное содержимое"
+
+msgid "Automatically &say all when recognition finishes"
+msgstr "&Читать всё после распознавания"
+
+msgid "Recognizes the content of the current navigator object with Paddle OCR"
+msgstr "Распознаёт содержимое текущего объекта навигатора с помощью Paddle OCR"
+
+msgid "Cycles through the available languages for Paddle OCR"
+msgstr "Переключает язык распознавания Paddle OCR"
+
+msgid "Shows the Paddle OCR settings"
+msgstr "Открывает настройки Paddle OCR"
+
+msgid "English"
+msgstr "Английский"
+
+msgid "Russian"
+msgstr "Русский"
+
+msgid "Loading OCR models"
+msgstr "Загрузка моделей OCR"

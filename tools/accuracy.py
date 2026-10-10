@@ -50,7 +50,7 @@ Snap to Grid|Zoom In|Zoom Out|Import MIDI File|Project Name: Untitled_01|Audio E
 CPU 12% Disk 3%|Inbox (24)|Search messages|Mark all as read|Archive|Account Settings|All
 Notifications|Dark Mode|Language: English|Keyboard Shortcuts|Help Center|Report a Problem
 Visit www.example.com for details|support@example.com|Illegal file name|Fill level 100%
-Allow all cookies|Install Illustrator|Bells and Vibes|Pads + Strings|Electronic Mayhem""".replace("\n", "|").split("|")
+Allow all cookies|Install Illustrator|Copy|Paste|Type|Export Copy|Bells and Vibes|Pads + Strings|Electronic Mayhem""".replace("\n", "|").split("|")
 
 RU = """Файл|Правка|Вид|Настройки|Открыть недавние файлы|Сохранить как...|Проверить обновления
 Параметры звука|Устройство вывода: Динамики|Частота дискретизации 48000 Гц|Громкость 75%
@@ -62,7 +62,7 @@ RU = """Файл|Правка|Вид|Настройки|Открыть неда�
 Сочетания клавиш|Справка и поддержка|Сообщить о проблеме|Свободно 12,4 ГБ из 256 ГБ
 Копирование файлов: осталось 3 минуты|Ещё|Разрешить доступ к микрофону|Все программы
 Папка «Документы»|Щёлкните, чтобы продолжить|Объём памяти|Съёмка, вьюга, жёлтый хвощ
-Вы уверены, что хотите выйти?|Сохранить изменения перед закрытием?|Новая вкладка""".replace("\n", "|").split("|")
+Вы уверены, что хотите выйти?|Сохранить изменения перед закрытием?|Новая вкладка|Все|Сохранить все|Все закладки""".replace("\n", "|").split("|")
 
 MIXED = """Открыть в Visual Studio Code|Плагин Omnisphere 2.8|Версия NVDA 2026.3|Скачать Firefox
 Настройки Wi-Fi|Файл README.md|Нажмите Ctrl+C, чтобы скопировать|Подключено: Bluetooth Headphones
@@ -73,26 +73,26 @@ def make_screens():
 	"""Список (название, картинка BGR, [(x0, y0, x1, y1, текст, язык)])."""
 	rng = random.Random(0)
 	screens = []
-	for theme, bg, fg in THEMES:
-		for size in SIZES:
-			img = Image.new("RGB", (1400, 800), bg)
-			draw = ImageDraw.Draw(img)
-			truth = []
-			for col, x in enumerate((20, 720)):
-				y = 15
-				i = 0
-				while y < 800 - size * 2:
-					r = rng.random()
-					lang, pool = ("en", EN) if r < 0.5 else ("ru", RU) if r < 0.85 else ("mix", MIXED)
-					text = rng.choice(pool)
-					font = ImageFont.truetype(f"C:/Windows/Fonts/{FONTS[(col + i) % len(FONTS)]}", size)
-					draw.text((x, y), text, font=font, fill=fg)
-					x0, y0, x1, y1 = draw.textbbox((x, y), text, font=font)
-					truth.append((x0, y0, x1, y1, text, lang))
-					y += int(size * 1.9)
-					i += 1
-			bgr = np.array(img)[:, :, ::-1].copy()
-			screens.append((f"{theme}, {size} пикс", bgr, truth))
+	# Как в жизни: у экрана основной язык, а другой и смешанные строки встречаются изредка.
+	for theme, bg, fg, size, main in ((*t, s, m) for t in THEMES for s in SIZES for m in ("en", "ru")):
+		langs = [(main, 0.75), ("ru" if main == "en" else "en", 0.1), ("mix", 0.15)]
+		img = Image.new("RGB", (1400, 800), bg)
+		draw = ImageDraw.Draw(img)
+		truth = []
+		for col, x in enumerate((20, 720)):
+			y = 15
+			i = 0
+			while y < 800 - size * 2:
+				lang = rng.choices([l for l, _ in langs], [p for _, p in langs])[0]
+				text = rng.choice({"en": EN, "ru": RU, "mix": MIXED}[lang])
+				font = ImageFont.truetype(f"C:/Windows/Fonts/{FONTS[(col + i) % len(FONTS)]}", size)
+				draw.text((x, y), text, font=font, fill=fg)
+				x0, y0, x1, y1 = draw.textbbox((x, y), text, font=font)
+				truth.append((x0, y0, x1, y1, text, lang))
+				y += int(size * 1.9)
+				i += 1
+		bgr = np.array(img)[:, :, ::-1].copy()
+		screens.append((f"{theme}, {size} пикс", bgr, truth))
 	return screens
 
 

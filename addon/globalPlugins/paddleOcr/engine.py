@@ -94,6 +94,7 @@ class OcrEngine:
 		if not boxes:
 			return []
 		items = [words for words, score in self._rec.read(bgr, boxes) if words and score >= REC_MIN_SCORE]
+		_pick_twin_script(items)
 		return _group_lines(items)
 
 	# --- детектор ---
@@ -184,14 +185,32 @@ class Reader:
 					cur = self._fix_mixed_script(cur, prob)
 					wx0 = x0 + int(cur[0][1] * toBox)
 					wx1 = min(x1, x0 + int(math.ceil((cur[-1][1] + 1) * toBox)))
-					words.append({
+					word = {
 						"x": wx0, "y": y0, "width": max(1, wx1 - wx0), "height": y1 - y0,
-						"text": _fix_case("".join(c for c, _ in cur)),
-					})
+						"text": _fix_case(_fix_il("".join(c for c, _ in cur))),
+					}
+					alt = self._twin_spelling(cur, prob)
+					if alt:
+						word["alt"] = _fix_case(_fix_il(alt))
+					words.append(word)
 					cur = []
 			else:
 				cur.append((ch, t))
 		return words, score
+
+	def _twin_spelling(self, word, prob):
+		"""Слово только из букв-двойников («Сору», «Bce») → оно же буквами другой азбуки, иначе None.
+
+		Какую азбуку оставить, решает _pick_twin_script по соседним словам.
+		"""
+		if not len(self._latin) or not len(self._cyr):
+			return None
+		letters = [c for c, _ in word if _script(c)]
+		scripts = {_script(c) for c in letters}
+		if len(scripts) != 1 or not all(c in _TWINS for c in letters):
+			return None
+		idx = self._latin if scripts == {"cyr"} else self._cyr
+		return "".join(self._chars[int(idx[prob[t, idx].argmax()])] if _script(c) else c for c, t in word)
 
 	def _fix_mixed_script(self, word, prob):
 		"""Убирает буквы-двойники чужой азбуки: «Itет» → «Item», «Windоws» → «Windows».
@@ -227,6 +246,32 @@ class Reader:
 		return fixed
 
 
+def _fix_il(text):
+	"""Заглавная I и строчная l в рубленых шрифтах одинаковые; модель путает их: «AlI», «AII».
+
+	Чиним только явные случаи:
+	- I после строчной буквы и не перед строчной — это l («AlI» → «All», «FiII» → «Fill»;
+	  «AddIn» не трогаем: там после I строчная);
+	- заглавная и дальше только I/l, всего от 3 букв — это строчные l («AII» → «All»);
+	- в слове заглавными (от 2 заглавных) строчная l — это I («TlGHT» → «TIGHT», «MlDl» → «MIDI»).
+	"""
+	if len(text) >= 3 and text[0].isupper() and text[0] not in "Il" and set(text[1:]) <= {"I", "l"}:
+		return text[0] + "l" * (len(text) - 1)
+	letters = [c for c in text if c.isalpha()]
+	if "l" in letters and sum(c.isupper() for c in letters) >= 2 and all(c.isupper() or c == "l" for c in letters):
+		return text.replace("l", "I")
+	# Слово заглавными с одной случайной строчной («tIGHT») не трогаем: его починит _fix_case.
+	if "I" not in text or sum(c.isupper() and c != "I" for c in letters) >= 2:
+		return text
+	chars = list(text)
+	# Слева направо: в «FiII» первая I станет l, и тогда вторая тоже окажется после строчной.
+	for i in range(1, len(chars)):
+		nxt = chars[i + 1] if i + 1 < len(chars) else ""
+		if chars[i] == "I" and chars[i - 1].islower() and _script(chars[i - 1]) == "latin" and not nxt.islower():
+			chars[i] = "l"
+	return "".join(chars)
+
+
 def _fix_case(text):
 	"""«DIREcTorY» → «DIRECTORY»: в мелких заглавных надписях модель путает регистр.
 
@@ -242,6 +287,48 @@ def _fix_case(text):
 	if not any(a.islower() and b.isupper() for a, b in zip(letters, letters[1:])):
 		return text
 	return text.upper()
+
+
+# Буквы, которые в кириллице и латинице выглядят одинаково (т и m модель тоже путает).
+_TWINS = set("АВЕКМНОРСТХУаеорсхукт" "ABEKMHOPCTXYaeopcxykm")
+
+
+def _word_script(text):
+	"""Азбука слова, если она точно видна: есть хоть одна буква не из двойников. Иначе None."""
+	for c in text:
+		s = _script(c)
+		if s and c not in _TWINS:
+			return s
+	return None
+
+
+def _pick_twin_script(items):
+	"""Слова только из букв-двойников пишем азбукой соседей по строке, а если соседей нет —
+	азбукой большинства слов на экране: «Сору Paste» → «Copy Paste», «Bce программы» → «Все программы».
+	"""
+	def majority(words):
+		counts = {"latin": 0, "cyr": 0}
+		for w in words:
+			s = _word_script(w["text"])
+			if s:
+				counts[s] += 1
+		if counts["latin"] == counts["cyr"]:
+			return None
+		return max(counts, key=counts.get)
+
+	screen = majority(w for ws in items for w in ws)
+	for ws in items:
+		target = majority(ws) or screen
+		for w in ws:
+			alt = w.pop("alt", None)
+			# alt написан другой азбукой, чем text; берём его, если соседи пишут именно так.
+			if alt and target and _word_script(w["text"]) is None and _script_of_letters(alt) == target:
+				w["text"] = alt
+
+
+def _script_of_letters(text):
+	"""Азбука первой буквы слова (для слов только из двойников все буквы одной азбуки)."""
+	return next((_script(c) for c in text if _script(c)), None)
 
 
 def latin_only(c):

@@ -73,3 +73,21 @@ def test_latin_only():
 	# Язык «en»: латиница с диакритикой, знаки и стрелки можно; иероглифы, греческий и кириллицу нельзя.
 	assert all(engine.latin_only(c) for c in "Aé9+…→")
 	assert not any(engine.latin_only(c) for c in "平γП∏")
+
+
+@pytest.mark.parametrize("raw, fixed", [
+	("AlI", "All"), ("AII", "All"), ("FiII", "Fill"), ("AddIn", "AddIn"), ("ID", "ID"),
+	("AI", "AI"), ("III", "III"), ("Illegal", "Illegal"), ("iPhone", "iPhone"), ("HeIlo", "HeIlo"),
+	("TlGHT", "TIGHT"), ("MlDl", "MIDI"), ("Al", "Al"), ("tIGHT", "tIGHT"),
+])
+def test_fix_il(raw, fixed):
+	assert engine._fix_il(raw) == fixed
+
+
+def test_pick_twin_script():
+	# «Сору» среди английских слов → латиница; «Bce» среди русских → кириллица; спорное без соседей — по экрану.
+	w = lambda text, alt=None: {"text": text, **({"alt": alt} if alt else {})}
+	items = [[w("Сору", "Copy"), w("Paste")], [w("Bce", "Все"), w("программы")], [w("Туре", "Type")], [w("Edit")]]
+	engine._pick_twin_script(items)
+	assert [x["text"] for ws in items for x in ws] == ["Copy", "Paste", "Все", "программы", "Type", "Edit"]
+	assert not any("alt" in x for ws in items for x in ws)

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Paddle OCR — help</title>
+</head>
+<body>
+<h1>Paddle OCR</h1>
+<p>Recognizes text on the screen with PaddleOCR models. It works just like the built-in Windows OCR (NVDA+R), but is usually more accurate, especially with small text and dark themes. Everything works offline.</p>
+<p>Requires NVDA 2026.3 or later.</p>
+
+<h2>Commands</h2>
+<p>There are no default gestures. Assign them in the NVDA menu, Preferences, Input gestures, category "Paddle OCR".</p>
+<ul>
+<li><strong>Recognizes the content of the current navigator object</strong>. Opens a result window, like NVDA+R. Move through the text with the arrow keys, press Enter to click a word, Escape to close.</li>
+<li><strong>Cycles through the available languages</strong>: English or Russian.</li>
+<li><strong>Shows the Paddle OCR settings</strong>.</li>
+</ul>
+<p>On the first recognition you will hear "Loading OCR models": the models are loaded into memory once, after that recognition is fast.</p>
+
+<h2>Languages</h2>
+<ul>
+<li><strong>English</strong> — the best accuracy for English and other Latin-script languages. Russian text is not read in this mode.</li>
+<li><strong>Russian</strong> — reads both Russian and English text, but English slightly worse than in the English mode.</li>
+</ul>
+<p>By default the language follows the NVDA interface language.</p>
+
+<h2>Settings</h2>
+<p>NVDA menu, Preferences, Settings, category "Paddle OCR".</p>
+<ul>
+<li><strong>Recognition language</strong>: same as NVDA, English or Russian.</li>
+<li><strong>Periodically refresh recognized content</strong>: the result window updates itself while open. Off by default.</li>
+<li><strong>Automatically say all when recognition finishes</strong>. On by default.</li>
+</ul>
+
+<h2>Screen Curtain</h2>
+<p>Like Windows OCR, the add-on can recognize with Screen Curtain on when Windows supports it. Otherwise NVDA asks you to turn Screen Curtain off temporarily.</p>
+
+<h2>Licenses</h2>
+<p>PaddleOCR models (PP-OCRv6, PP-OCRv5 eslav): Apache 2.0. Libraries: onnxruntime (MIT), NumPy (BSD), OpenCV (Apache 2.0). Full license texts are in the add-on folder: licenses, and next to each library in globalPlugins\paddleOcr\lib.</p>
+</body>
+</html>

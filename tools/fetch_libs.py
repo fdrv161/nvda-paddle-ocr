@@ -44,10 +44,14 @@ def unpack_wheels():
 		if not found:
 			raise SystemExit(f"Не найдено колесо {pattern} в {WHEELS}")
 		with zipfile.ZipFile(found[0]) as z:
-			# Папки .dist-info не нужны для работы, только место занимают.
+			# Папки .dist-info для работы не нужны; оставляем из них только лицензии (у numpy они только там).
 			for item in z.namelist():
 				if ".dist-info/" not in item:
 					z.extract(item, lib)
+				elif "/licenses/" in item and not item.endswith("/"):
+					dest = lib / "licenses" / name / item.split("/licenses/", 1)[1]
+					dest.parent.mkdir(parents=True, exist_ok=True)
+					dest.write_bytes(z.read(item))
 		print(f"Распаковано: {found[0].name}")
 	# Тесты, заголовки C и инструменты в дополнении не нужны.
 	for junk in ("numpy/_core/tests", "numpy/tests", "numpy/_core/include", "onnxruntime/tools",
