@@ -67,3 +67,9 @@ def test_word_positions(ocr, size):
 		(tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1.2 * k, max(1, int(2 * k)))
 		assert x * k <= cx <= x * k + tw
 		assert y * k - th <= cy <= y * k + th * 0.3
+
+
+def test_latin_only():
+	# Язык «en»: латиница с диакритикой, знаки и стрелки можно; иероглифы, греческий и кириллицу нельзя.
+	assert all(engine.latin_only(c) for c in "Aé9+…→")
+	assert not any(engine.latin_only(c) for c in "平γП∏")

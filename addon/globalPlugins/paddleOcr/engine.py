@@ -72,30 +72,28 @@ def _session(path, threads):
 	return ort.InferenceSession(str(path), sess_options=opts, providers=["CPUExecutionProvider"])
 
 
+def _run_options():
+	# После каждого запуска отдаём системе рабочую память, иначе пик большого экрана висит до конца.
+	opts = ort.RunOptions()
+	opts.add_run_config_entry("memory.enable_memory_arena_shrinkage", "cpu:0")
+	return opts
+
+
 class OcrEngine:
-	def __init__(self, detPath, recPath, recYml, threads=0):
+	"""Детектор + распознаватель. allowed(c) — какие символы распознавателю можно выдавать (None — все)."""
+
+	def __init__(self, detPath, recPath, recYml, threads=0, allowed=None):
 		self._det = _session(detPath, threads)
-		self._rec = _session(recPath, threads)
 		self._detInput = self._det.get_inputs()[0].name
-		self._recInput = self._rec.get_inputs()[0].name
-		# Индекс 0 — «пусто» (blank) в CTC, в конце модели знают ещё пробел.
-		self._chars = ["", *_load_charset(recYml), " "]
-		classes = self._rec.get_outputs()[0].shape[-1]
-		if isinstance(classes, int) and classes != len(self._chars):
-			raise ValueError(f"Словарь ({len(self._chars)}) не совпадает с моделью ({classes})")
-		# Номера латинских и кириллических букв в словаре — для исправления смешанных слов.
-		self._latin = np.array([i for i, c in enumerate(self._chars) if _script(c) == "latin"])
-		self._cyr = np.array([i for i, c in enumerate(self._chars) if _script(c) == "cyr"])
-		# После каждого запуска отдаём системе рабочую память, иначе пик большого экрана висит до конца.
-		self._runOpts = ort.RunOptions()
-		self._runOpts.add_run_config_entry("memory.enable_memory_arena_shrinkage", "cpu:0")
+		self._rec = Reader(recPath, recYml, threads, allowed)
+		self._runOpts = _run_options()
 
 	def recognize(self, bgr):
 		"""Возвращает список строк; строка — список слов {x, y, width, height, text}."""
 		boxes = self._detect(bgr)
 		if not boxes:
 			return []
-		items = self._read(bgr, boxes)
+		items = [words for words, score in self._rec.read(bgr, boxes) if words and score >= REC_MIN_SCORE]
 		return _group_lines(items)
 
 	# --- детектор ---
@@ -112,16 +110,33 @@ class OcrEngine:
 		pred = self._det.run(None, {self._detInput: x}, self._runOpts)[0][0, 0]
 		return _db_boxes(pred, w / rw, h / rh, w, h)
 
-	# --- распознаватель ---
 
-	def _read(self, bgr, boxes):
-		crops = []
-		for (x0, y0, x1, y1) in boxes:
-			crop = bgr[y0:y1, x0:x1]
-			crops.append(crop)
+class Reader:
+	"""Распознаватель строк (CTC) одной модели."""
+
+	def __init__(self, recPath, recYml, threads=0, allowed=None):
+		self._rec = _session(recPath, threads)
+		self._recInput = self._rec.get_inputs()[0].name
+		# Индекс 0 — «пусто» (blank) в CTC, в конце модели знают ещё пробел.
+		self._chars = ["", *_load_charset(recYml), " "]
+		classes = self._rec.get_outputs()[0].shape[-1]
+		if isinstance(classes, int) and classes != len(self._chars):
+			raise ValueError(f"Словарь ({len(self._chars)}) не совпадает с моделью ({classes})")
+		# Запрещённые символы (allowed(c) ложно) при расшифровке не выбираются никогда.
+		self._banned = None
+		if allowed:
+			self._banned = np.array([i > 0 and not allowed(c) for i, c in enumerate(self._chars)])
+		# Номера латинских и кириллических букв в словаре — для исправления смешанных слов.
+		self._latin = np.array([i for i, c in enumerate(self._chars) if _script(c) == "latin"])
+		self._cyr = np.array([i for i, c in enumerate(self._chars) if _script(c) == "cyr"])
+		self._runOpts = _run_options()
+
+	def read(self, bgr, boxes):
+		"""Для каждой рамки — (слова, уверенность); слов может не быть."""
+		crops = [bgr[y0:y1, x0:x1] for (x0, y0, x1, y1) in boxes]
 		# Сортируем по пропорциям, чтобы в одной пачке были строки похожей длины (меньше пустого добивания).
 		order = sorted(range(len(crops)), key=lambda i: crops[i].shape[1] / crops[i].shape[0])
-		items = []
+		results = [None] * len(crops)
 		for start in range(0, len(order), REC_BATCH):
 			idx = order[start:start + REC_BATCH]
 			maxRatio = max(crops[i].shape[1] / crops[i].shape[0] for i in idx)
@@ -136,13 +151,14 @@ class OcrEngine:
 				widths.append(rw)
 			probs = self._rec.run(None, {self._recInput: batch}, self._runOpts)[0]
 			for j, i in enumerate(idx):
-				words, score = self._ctc_words(probs[j], batchW, widths[j], boxes[i])
-				if words and score >= REC_MIN_SCORE:
-					items.append(words)
-		return items
+				results[i] = self._ctc_words(probs[j], batchW, widths[j], boxes[i])
+		return results
 
 	def _ctc_words(self, prob, batchW, resizedW, box):
 		"""CTC-декодирование + координаты слов по позициям букв в строке."""
+		if self._banned is not None:
+			prob = prob.copy()
+			prob[:, self._banned] = 0
 		ids = prob.argmax(axis=1)
 		conf = prob.max(axis=1)
 		steps = len(ids)
@@ -226,6 +242,13 @@ def _fix_case(text):
 	if not any(a.islower() and b.isupper() for a, b in zip(letters, letters[1:])):
 		return text
 	return text.upper()
+
+
+def latin_only(c):
+	"""Латиница, цифры, знаки и стрелки. Иероглифы и прочее запрещаем: иконки v6 уверенно читает как «平»."""
+	o = ord(c)
+	return o < 0x250 or 0x2000 <= o < 0x2200
+
 
 
 def bgra_to_bgr(buf, width, height):

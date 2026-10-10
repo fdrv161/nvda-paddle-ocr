@@ -18,7 +18,7 @@ PLUGIN = ROOT / "addon" / "globalPlugins" / "paddleOcr"
 WHEELS = ROOT / "tmp" / "wheels"
 
 PACKAGES = ("onnxruntime==1.30.0", "numpy==2.5.3", "opencv-python-headless==5.0.0.93")
-MODELS = ("det_v6_tiny", "rec_eslav_v5", "rec_v6_tiny")
+MODELS = ("det_v6_tiny", "rec_eslav_v5", "rec_v6_small")
 MODEL_FILES = ("inference.onnx", "inference.yml")
 
 
