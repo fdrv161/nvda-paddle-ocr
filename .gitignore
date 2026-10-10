@@ -1,0 +1,17 @@
+﻿.env
+.env.*
+__pycache__/
+*.py[cod]
+# Окружение, кэши и временные файлы
+.venv/
+.cache/
+tmp/
+# Модели большие и скачиваются заново: tools/fetch_models.py (хэши в models/manifest.json)
+models/*/
+# Чужое дополнение, лежит только как пример
+OnnxASR/
+# Собранные пакеты
+*.nvda-addon
+build/
+# Локальные настройки Claude Code
+.claude/settings.local.json

@@ -1,0 +1,93 @@
+{
+  "det_v6_tiny": {
+    "repo": "PaddlePaddle/PP-OCRv6_tiny_det_onnx",
+    "files": {
+      "inference.onnx": {
+        "size": 1780590,
+        "sha256": "193bab7a04fca699a6c82e6abb5b81bdb28177f0abd4062552b04908dafb19f8"
+      },
+      "inference.yml": {
+        "size": 883,
+        "sha256": "3ac018be6f97499a08faa3bbdeb33640968d9307f6736d152902747a9f259593"
+      }
+    }
+  },
+  "det_v6_small": {
+    "repo": "PaddlePaddle/PP-OCRv6_small_det_onnx",
+    "files": {
+      "inference.onnx": {
+        "size": 9880512,
+        "sha256": "d73e0058b7a8086bbd57f3d10b8bcd4ff95363f67e06e2762b5e814fe9c9410e"
+      },
+      "inference.yml": {
+        "size": 885,
+        "sha256": "193f435274bf9f0b5f71a929bbfbcf148282df7e633b34e7c373e8f44741b516"
+      }
+    }
+  },
+  "det_v6_medium": {
+    "repo": "PaddlePaddle/PP-OCRv6_medium_det_onnx",
+    "files": {
+      "inference.onnx": {
+        "size": 62032837,
+        "sha256": "eb13b44b25bb36f89528b68720af8a61d9cf381176107f465db1757b65d086e1"
+      },
+      "inference.yml": {
+        "size": 886,
+        "sha256": "7298d5ead546584af2504d03355f881ac7a7bc0eb1e282d3e159277c1d0af871"
+      }
+    }
+  },
+  "rec_v6_tiny": {
+    "repo": "PaddlePaddle/PP-OCRv6_tiny_rec_onnx",
+    "files": {
+      "inference.onnx": {
+        "size": 4462639,
+        "sha256": "9ef676d6ed3c88256a2d92c640c44f25b0c40947e111b14b8be8f594091563e6"
+      },
+      "inference.yml": {
+        "size": 55571,
+        "sha256": "66170210bad538e83fff3c4a3867e547d6bf20b50d64b20347c4b913f3034ea1"
+      }
+    }
+  },
+  "rec_v6_small": {
+    "repo": "PaddlePaddle/PP-OCRv6_small_rec_onnx",
+    "files": {
+      "inference.onnx": {
+        "size": 21159378,
+        "sha256": "5435fd747c9e0efe15a96d0b378d5bd157e9492ed8fd80edf08f30d02fa24634"
+      },
+      "inference.yml": {
+        "size": 150579,
+        "sha256": "ab078671bb49f06228eadccd34f1bb501e157f7a047095ffb943ba81512c77d1"
+      }
+    }
+  },
+  "rec_v6_medium": {
+    "repo": "PaddlePaddle/PP-OCRv6_medium_rec_onnx",
+    "files": {
+      "inference.onnx": {
+        "size": 76554979,
+        "sha256": "9c09abf0957f7968c7586464b7397b84ad2387a0497a351af40e9acc71b673ba"
+      },
+      "inference.yml": {
+        "size": 150580,
+        "sha256": "991b700facf5b50a7de193468207d5f4255b538dde0d312ae3b7c7a9b6873129"
+      }
+    }
+  },
+  "rec_eslav_v5": {
+    "repo": "PaddlePaddle/eslav_PP-OCRv5_mobile_rec_onnx",
+    "files": {
+      "inference.onnx": {
+        "size": 7887627,
+        "sha256": "b3018ef2b09a0250b6e0c8e871c927098363e5fd4df890cc68e8358eb0aaf1bd"
+      },
+      "inference.yml": {
+        "size": 4538,
+        "sha256": "025039bac23eb4a308efcefa4d58eab3af440767815c6ba6938468bf6353ee5a"
+      }
+    }
+  }
+}
