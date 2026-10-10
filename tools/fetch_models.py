@@ -1,6 +1,8 @@
 """Скачивает официальные ONNX-модели PaddleOCR с Hugging Face в папку models/.
 
-Запуск: .venv/Scripts/python tools/fetch_models.py
+Запуск: .venv/Scripts/python tools/fetch_models.py [имена моделей]
+  без имён — все модели (для замеров); только для дополнения:
+  .venv/Scripts/python tools/fetch_models.py det_v6_tiny rec_v6_small rec_eslav_v5
 Повторный запуск не качает заново то, что уже есть.
 В конце пишет models/manifest.json с размерами и sha256 — потом по нему
 проверяем, что в дополнение попали ровно те файлы.
@@ -45,11 +47,19 @@ def download(url, dest):
 	tmp.replace(dest)
 
 
-def main():
-	manifest = {}
-	total = len(REPOS) * len(FILES)
+def main(names):
+	unknown = [n for n in names if n not in REPOS]
+	if unknown:
+		print(f"Ошибка: неизвестные модели {', '.join(unknown)}. Есть: {', '.join(REPOS)}")
+		return 2
+	names = names or list(REPOS)
+	# Дополняем уже записанный список, чтобы скачивание части моделей не стирало сведения об остальных.
+	manifestPath = MODELS_DIR / "manifest.json"
+	manifest = json.loads(manifestPath.read_text(encoding="utf-8")) if manifestPath.exists() else {}
+	total = len(names) * len(FILES)
 	done = 0
-	for name, repo in REPOS.items():
+	for name in names:
+		repo = REPOS[name]
 		folder = MODELS_DIR / name
 		folder.mkdir(parents=True, exist_ok=True)
 		entry = {"repo": repo, "files": {}}
@@ -58,13 +68,19 @@ def main():
 			if not dest.exists():
 				download(f"https://huggingface.co/{repo}/resolve/main/{fname}", dest)
 			entry["files"][fname] = {"size": dest.stat().st_size, "sha256": sha256(dest)}
+			# Модель на Hugging Face могли заменить: тогда стоп, а не тихая сборка с другой моделью.
+			known = manifest.get(name, {}).get("files", {}).get(fname, {}).get("sha256")
+			if known and known != entry["files"][fname]["sha256"]:
+				print(f"Ошибка: {name}/{fname} не совпадает с models/manifest.json (хэш другой). "
+					"Проверьте модель; если замена нужна, удалите её запись из manifest.json.")
+				return 1
 			done += 1
 			print(f"Готово {done} из {total}: {name}/{fname}")
 		manifest[name] = entry
-	(MODELS_DIR / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+	manifestPath.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 	print("Все модели на месте.")
 	return 0
 
 
 if __name__ == "__main__":
-	sys.exit(main())
+	sys.exit(main(sys.argv[1:]))

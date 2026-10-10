@@ -20,3 +20,11 @@ addon/globalPlugins/paddleOcr/lib/
 addon/globalPlugins/paddleOcr/models/
 # Портативная NVDA для проверки
 Nvda beta/
+# Скилл NVDA для Claude: лежит локально, в репозиторий не нужен
+SKILL.md
+SKILL-README.md
+planner.md
+agents/
+assets/
+references/
+scripts/
