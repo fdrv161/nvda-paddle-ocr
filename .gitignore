@@ -15,3 +15,8 @@ OnnxASR/
 build/
 # Локальные настройки Claude Code
 .claude/settings.local.json
+# Библиотеки и модели дополнения собираются tools/fetch_libs.py
+addon/globalPlugins/paddleOcr/lib/
+addon/globalPlugins/paddleOcr/models/
+# Портативная NVDA для проверки
+Nvda beta/

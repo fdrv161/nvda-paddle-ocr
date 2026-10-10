@@ -24,6 +24,8 @@ REC_HEIGHT = 48
 REC_BATCH = 4
 # Строки, в которых распознаватель не уверен (обычно иконки и рамки), выбрасываем.
 REC_MIN_SCORE = 0.5
+# Куски одной высоты с промежутком больше стольких высот строки считаем разными строками (колонками).
+LINE_GAP = 10
 
 _DET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 _DET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
@@ -168,7 +170,7 @@ class OcrEngine:
 					wx1 = min(x1, x0 + int(math.ceil((cur[-1][1] + 1) * toBox)))
 					words.append({
 						"x": wx0, "y": y0, "width": max(1, wx1 - wx0), "height": y1 - y0,
-						"text": "".join(c for c, _ in cur),
+						"text": _fix_case("".join(c for c, _ in cur)),
 					})
 					cur = []
 			else:
@@ -207,6 +209,28 @@ class OcrEngine:
 						fixed[k] = (self._chars[int(mainIdx[prob[t, mainIdx].argmax()])], t)
 			i = j
 		return fixed
+
+
+def _fix_case(text):
+	"""«DIREcTorY» → «DIRECTORY»: в мелких заглавных надписях модель путает регистр.
+
+	Чиним, только если заглавных больше половины И после строчной снова идёт заглавная —
+	так не трогаем нормальные «iPhone», «GitHub», «IDs», «macOS».
+	"""
+	letters = [c for c in text if c.isalpha()]
+	if len(letters) < 4:
+		return text
+	upper = sum(c.isupper() for c in letters)
+	if upper * 2 <= len(letters) or upper == len(letters):
+		return text
+	if not any(a.islower() and b.isupper() for a, b in zip(letters, letters[1:])):
+		return text
+	return text.upper()
+
+
+def bgra_to_bgr(buf, width, height):
+	"""Снимок экрана NVDA (байты RGBQUAD: синий, зелёный, красный, пусто) → картинка BGR для движка."""
+	return np.frombuffer(buf, dtype=np.uint8).reshape(height, width, 4)[:, :, :3].copy()
 
 
 def _script(c):
@@ -272,5 +296,14 @@ def _group_lines(items):
 	result = []
 	for _, _, parts in lines:
 		parts.sort(key=lambda ws: ws[0]["x"])
-		result.append([w for ws in parts for w in ws])
+		cur = list(parts[0])
+		for ws in parts[1:]:
+			# Большой промежуток — это уже другая колонка (список слева, подсказка справа):
+			# читаем её отдельной строкой, чтобы не получалось «Human Voices Make a Category Selection».
+			gap = ws[0]["x"] - (cur[-1]["x"] + cur[-1]["width"])
+			if gap > LINE_GAP * min(cur[-1]["height"], ws[0]["height"]):
+				result.append(cur)
+				cur = []
+			cur.extend(ws)
+		result.append(cur)
 	return result
