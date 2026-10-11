@@ -45,7 +45,19 @@ jobs:
           python -m pytest tests -q
 
       - name: Build
-        run: python tools/build_addon.py
+        run: |
+          python -m pip install --quiet markdown
+          python tools/build_addon.py
+
+      # Release text is the manifest changelog (what NVDA shows as "What's new").
+      - name: Release notes
+        shell: python
+        run: |
+          import re
+          text = open("addon/manifest.ini", encoding="utf-8").read()
+          m = re.search(r'^changelog\s*=\s*"{3}(.*?)"{3}', text, re.MULTILINE | re.DOTALL)
+          notes = m.group(1).strip() + "\n" if m else ""
+          open("release_notes.md", "w", encoding="utf-8").write(notes)
 
       - uses: actions/upload-artifact@v4
         with:
@@ -57,4 +69,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: "*.nvda-addon"
-          generate_release_notes: true
+          body_path: release_notes.md

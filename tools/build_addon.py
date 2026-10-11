@@ -11,8 +11,22 @@ import sys
 import zipfile
 from pathlib import Path
 
+import markdown
+
 ROOT = Path(__file__).resolve().parent.parent
 ADDON = ROOT / "addon"
+
+
+def md_to_html(path):
+	"""Help page for NVDA from doc/<lang>/readme.md (GitHub shows the .md, NVDA opens the .html)."""
+	text = path.read_text(encoding="utf-8")
+	title = text.splitlines()[0].lstrip("# ").strip()
+	body = markdown.markdown(text)
+	lang = path.parent.name
+	return (
+		f'<!doctype html>\n<html lang="{lang}">\n<head>\n<meta charset="utf-8">\n'
+		f"<title>{title}</title>\n</head>\n<body>\n{body}\n</body>\n</html>\n"
+	)
 
 
 def parse_po(path):
@@ -79,6 +93,10 @@ def main():
 		for f in sorted(ADDON.rglob("*")):
 			if f.is_file() and "__pycache__" not in f.parts:
 				arc = f.relative_to(ADDON).as_posix()
+				if f.name == "readme.md" and f.parent.parent.name == "doc":
+					z.writestr(arc[:-3] + ".html", md_to_html(f))
+					count += 1
+					continue
 				z.write(f, arc)
 				count += 1
 				if f.suffix == ".po":

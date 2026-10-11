@@ -4,12 +4,11 @@ Recognizes text on the screen with [PaddleOCR](https://github.com/PaddlePaddle/P
 
 Everything works offline: the models and libraries are inside the add-on.
 
-[Справка на русском](addon/doc/ru/readme.html)
+[Справка на русском](addon/doc/ru/readme.md)
 
 ## Requirements
 
 - NVDA 2026.3 or later (64-bit).
-- Windows 10 or 11.
 
 ## Installation
 
@@ -49,7 +48,7 @@ python -m venv .venv
 ```
 
 ```bash
-.venv/Scripts/python -m pip install numpy opencv-python-headless onnxruntime pytest pillow
+.venv/Scripts/python -m pip install numpy opencv-python-headless onnxruntime pytest pillow markdown
 ```
 
 ```bash
