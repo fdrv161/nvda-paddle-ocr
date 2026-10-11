@@ -1,16 +1,19 @@
+# Paddle OCR add-on for NVDA
+# Copyright (C) 2026 fdrv161
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 """Recognizer for NVDA: takes a capture from contentRecog and returns a LinesWordsResult."""
 import ctypes
 import os
 import sys
 import threading
 
+import addonHandler
 import config
 import languageHandler
 import ui
 from contentRecog import ContentRecognizer, LinesWordsResult
 from logHandler import log
-
-import addonHandler
 
 addonHandler.initTranslation()
 
@@ -107,7 +110,7 @@ class PaddleOcr(ContentRecognizer):
 				bgr = engine.bgra_to_bgr(buf, imageInfo.recogWidth, imageInfo.recogHeight)
 				result = LinesWordsResult(eng.recognize(bgr), imageInfo)
 			except Exception as e:
-				log.error("Paddle OCR: recognition failed", exc_info=True)
+				log.exception("Paddle OCR: recognition failed")
 				result = e
 		if self._current is token:
 			self._current = None

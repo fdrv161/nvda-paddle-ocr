@@ -30,3 +30,4 @@ references/
 scripts/
 # Свои скриншоты для замеров: только локально
 tests/screens/
+.chttoo/

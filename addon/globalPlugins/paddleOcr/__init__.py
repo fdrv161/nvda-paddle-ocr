@@ -1,3 +1,7 @@
+# Paddle OCR add-on for NVDA
+# Copyright (C) 2026 fdrv161
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 """Paddle OCR: recognizes screen text with PaddleOCR models, like NVDA+R with Windows OCR."""
 import addonHandler
 import config
@@ -84,6 +88,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		if globalVars.appArgs.secure:
 			return
 		from contentRecog import recogUi
+
 		from .recognizer import PaddleOcr
 		if self._recognizer is None:
 			self._recognizer = PaddleOcr()

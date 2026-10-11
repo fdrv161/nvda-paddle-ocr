@@ -54,8 +54,9 @@ def compile_po(path):
 
 def main():
 	manifest = (ADDON / "manifest.ini").read_text(encoding="utf-8")
-	name = re.search(r"^name\s*=\s*(\S+)", manifest, re.M).group(1)
-	version = re.search(r"^version\s*=\s*(\S+)", manifest, re.M).group(1)
+	# Values may be quoted (the NVDA guide asks for quotes), so take what is inside them.
+	name = re.search(r'^name\s*=\s*"?([^"\s]+)', manifest, re.MULTILINE).group(1)
+	version = re.search(r'^version\s*=\s*"?([^"\s]+)', manifest, re.MULTILINE).group(1)
 	plugin = ADDON / "globalPlugins" / name
 	for need in ("lib", "models"):
 		if not (plugin / need).is_dir():
@@ -80,6 +81,9 @@ def main():
 					# NVDA reads translations from .mo; build it here, without separate gettext tools.
 					z.writestr(arc[:-3] + ".mo", compile_po(f))
 					count += 1
+		# The add-on's own license (GPL), next to the licenses of the bundled models and libraries.
+		z.write(ROOT / "LICENSE", "COPYING.txt")
+		count += 1
 	print(f"Готово: {out.name}, файлов {count}, {out.stat().st_size / 2**20:.0f} МБ")
 	return 0
 

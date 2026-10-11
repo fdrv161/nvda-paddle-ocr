@@ -89,6 +89,7 @@ GitHub Actions сам скачает модели и библиотеки, пр�
 
 ## Лицензии
 
+- Код дополнения — GNU GPL версии 2 или новее, текст в [LICENSE](LICENSE).
 - Модели PaddleOCR (PP-OCRv6, PP-OCRv5 eslav) — Apache 2.0.
 - onnxruntime — MIT, NumPy — BSD, OpenCV — Apache 2.0.
 
@@ -104,4 +105,5 @@ An NVDA add-on that recognizes text on the screen with [PaddleOCR](https://githu
 - Download the latest `.nvda-addon` from [Releases](../../releases), install it, then assign gestures in Input gestures, category "Paddle OCR" (there are no default gestures).
 - Commands: recognize the current navigator object, cycle the recognition language (English or Russian), open Paddle OCR settings.
 - English mode gives the best accuracy for Latin-script text but does not read Russian. Russian mode reads both Russian and English.
+- License: add-on code GNU GPL version 2 or later; bundled models and libraries keep their own licenses (Apache 2.0, MIT, BSD).
 - Building: see the developer section above. Pushing a tag `vX.Y.Z` makes GitHub Actions build the add-on and publish a release.

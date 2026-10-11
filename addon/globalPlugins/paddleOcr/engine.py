@@ -1,3 +1,7 @@
+# Paddle OCR add-on for NVDA
+# Copyright (C) 2026 fdrv161
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 """OCR engine on PaddleOCR models (DB detector + CTC recognizer) via onnxruntime.
 
 Imports nothing from NVDA, so it can be tested with plain Python.
@@ -10,6 +14,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import onnxruntime as ort
+import itertools
 
 # Detector post-processing settings from the inference.yml of the PP-OCRv6 models.
 DET_THRESH = 0.2
@@ -105,8 +110,8 @@ class OcrEngine:
 		h, w = bgr.shape[:2]
 		scale = min(1.0, DET_MAX_SIDE / max(h, w))
 		# The model needs sides that are multiples of 32.
-		rh = max(32, int(round(h * scale / 32)) * 32)
-		rw = max(32, int(round(w * scale / 32)) * 32)
+		rh = max(32, round(h * scale / 32) * 32)
+		rw = max(32, round(w * scale / 32) * 32)
 		img = cv2.resize(bgr, (rw, rh)) if (rw, rh) != (w, h) else bgr
 		# (pixel/255 - mean)/std per channel straight into the 1×3×h×w layout: no intermediate float
 		# copies of the whole image, which is noticeable on a 1080p screen.
@@ -153,12 +158,12 @@ class Reader:
 		for start in range(0, len(order), REC_BATCH):
 			idx = order[start:start + REC_BATCH]
 			maxRatio = max(crops[i].shape[1] / crops[i].shape[0] for i in idx)
-			batchW = max(int(math.ceil(REC_HEIGHT * maxRatio)), REC_HEIGHT)
+			batchW = max(math.ceil(REC_HEIGHT * maxRatio), REC_HEIGHT)
 			batch = np.zeros((len(idx), 3, REC_HEIGHT, batchW), dtype=np.float32)
 			widths = []
 			for j, i in enumerate(idx):
 				ch, cw = crops[i].shape[:2]
-				rw = min(batchW, max(1, int(math.ceil(REC_HEIGHT * cw / ch))))
+				rw = min(batchW, max(1, math.ceil(REC_HEIGHT * cw / ch)))
 				img = cv2.resize(crops[i], (rw, REC_HEIGHT)).astype(np.float32)
 				batch[j, :, :, :rw] = ((img / 255.0 - 0.5) / 0.5).transpose(2, 0, 1)
 				widths.append(rw)
@@ -196,7 +201,7 @@ class Reader:
 				if cur:
 					cur = self._fix_mixed_script(cur, prob)
 					wx0 = x0 + int(cur[0][1] * toBox)
-					wx1 = min(x1, x0 + int(math.ceil((cur[-1][1] + 1) * toBox)))
+					wx1 = min(x1, x0 + math.ceil((cur[-1][1] + 1) * toBox))
 					word = {
 						"x": wx0, "y": y0, "width": max(1, wx1 - wx0), "height": y1 - y0,
 						"text": _fix_case(_fix_il("".join(c for c, _ in cur))),
@@ -296,7 +301,7 @@ def _fix_case(text):
 	upper = sum(c.isupper() for c in letters)
 	if upper * 2 <= len(letters) or upper == len(letters):
 		return text
-	if not any(a.islower() and b.isupper() for a, b in zip(letters, letters[1:])):
+	if not any(a.islower() and b.isupper() for a, b in itertools.pairwise(letters)):
 		return text
 	return text.upper()
 
@@ -370,7 +375,7 @@ def _script(c):
 def _db_boxes(pred, sx, sy, w, h):
 	"""Detector probability map → line rectangles (x0, y0, x1, y1) in pixels of the original image."""
 	bitmap = (pred > DET_THRESH).astype(np.uint8)
-	contours, _ = cv2.findContours(bitmap, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+	contours, _hierarchy = cv2.findContours(bitmap, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 	boxes = []
 	for cnt in contours:
 		bx, by, bw, bh = cv2.boundingRect(cnt)
@@ -389,10 +394,10 @@ def _db_boxes(pred, sx, sy, w, h):
 		if min(rw, rh) + 2 * d < DET_MIN_SIZE + 2:
 			continue
 		# Text on screen is horizontal, so take an upright rectangle around the rotated one.
-		x0 = max(0, int(math.floor(pts[:, 0].min() * sx)))
-		y0 = max(0, int(math.floor(pts[:, 1].min() * sy)))
-		x1 = min(w, int(math.ceil(pts[:, 0].max() * sx)))
-		y1 = min(h, int(math.ceil(pts[:, 1].max() * sy)))
+		x0 = max(0, math.floor(pts[:, 0].min() * sx))
+		y0 = max(0, math.floor(pts[:, 1].min() * sy))
+		x1 = min(w, math.ceil(pts[:, 0].max() * sx))
+		y1 = min(h, math.ceil(pts[:, 1].max() * sy))
 		if x1 - x0 >= 2 and y1 - y0 >= 2:
 			boxes.append((x0, y0, x1, y1))
 	return boxes
@@ -416,7 +421,7 @@ def _group_lines(items):
 				continue
 		lines.append([top, bottom, [ws]])
 	result = []
-	for _, _, parts in lines:
+	for _top, _bottom, parts in lines:
 		parts.sort(key=lambda ws: ws[0]["x"])
 		cur = list(parts[0])
 		for ws in parts[1:]:
