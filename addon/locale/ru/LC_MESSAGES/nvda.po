@@ -30,11 +30,11 @@ msgstr "Переключает язык распознавания Paddle OCR"
 msgid "Shows the Paddle OCR settings"
 msgstr "Открывает настройки Paddle OCR"
 
-msgid "English"
-msgstr "Английский"
+msgid "Latin"
+msgstr "Латиница"
 
-msgid "Russian"
-msgstr "Русский"
+msgid "Cyrillic"
+msgstr "Кириллица"
 
 msgid "Loading OCR models"
 msgstr "Загрузка моделей OCR"

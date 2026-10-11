@@ -31,7 +31,8 @@ LANGUAGES = {
 
 def languageName(lang):
 	# Translators: OCR language names, spoken when switching the Paddle OCR language.
-	return {"en": _("English"), "ru": _("Russian")}[lang]
+	# The models read alphabets, not languages, so the modes are named by script.
+	return {"en": _("Latin"), "ru": _("Cyrillic")}[lang]
 
 
 def getLanguage(auto=False):
@@ -39,7 +40,8 @@ def getLanguage(auto=False):
 	lang = config.conf["paddleOcr"]["language"]
 	if lang in LANGUAGES and not auto:
 		return lang
-	return "ru" if languageHandler.getLanguage().startswith("ru") else "en"
+	# Cyrillic-script NVDA languages that the eslav model can read.
+	return "ru" if languageHandler.getLanguage().split("_")[0] in ("ru", "uk", "be", "bg") else "en"
 
 
 # One engine for the whole NVDA session: loading is slow, but requests after it are fast.

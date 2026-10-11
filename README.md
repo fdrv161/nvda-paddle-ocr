@@ -4,32 +4,32 @@ Recognizes text on the screen with [PaddleOCR](https://github.com/PaddlePaddle/P
 
 Everything works offline: the models and libraries are inside the add-on.
 
-[Справка на русском](addon/doc/ru/readme.md)
-
 ## Requirements
 
 - NVDA 2026.3 or later (64-bit).
 
 ## Installation
 
-1. Download the latest `paddleOcr-x.y.z.nvda-addon` from [Releases](../../releases).
+1. Open the [latest release](../../releases/latest) (always the current version) and download the `paddleOcr-x.y.z.nvda-addon` file.
 2. Open it, confirm the installation and restart NVDA.
 3. Assign gestures: NVDA menu, Preferences, Input gestures, category "Paddle OCR". There are no default gestures.
 
 ## Commands
 
 - **Recognize the current navigator object.** Opens the result window. Arrow keys move through the text, Enter clicks a word, Escape closes the window.
-- **Cycle the recognition language**: English or Russian.
+- **Cycle the recognition language**: Latin or Cyrillic.
 - **Open Paddle OCR settings.**
 
 The first recognition says "Loading OCR models". After that a full screen takes about 0.4 seconds.
 
 ## Languages
 
-- **English**: the best accuracy for English and other Latin-script languages. Does not read Cyrillic.
-- **Russian**: reads Russian and English, English slightly worse than in English mode.
+The models read alphabets rather than single languages:
 
-By default the language follows the NVDA language.
+- **Latin**: English, German, French, Spanish, Polish and other Latin-script languages. The best accuracy. Does not read Cyrillic.
+- **Cyrillic**: Russian, Ukrainian, Belarusian and Bulgarian, plus English (slightly worse than in Latin mode). Serbian and Macedonian letters are not supported.
+
+By default the mode follows the NVDA language.
 
 ## Settings
 

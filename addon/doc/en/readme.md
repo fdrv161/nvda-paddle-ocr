@@ -9,23 +9,25 @@ Requires NVDA 2026.3 or later.
 There are no default gestures. Assign them in the NVDA menu, Preferences, Input gestures, category "Paddle OCR".
 
 * **Recognizes the content of the current navigator object**. Opens a result window, like NVDA+R. Move through the text with the arrow keys, press Enter to click a word, Escape to close.
-* **Cycles through the available languages**: English or Russian.
+* **Cycles through the available languages**: Latin or Cyrillic.
 * **Shows the Paddle OCR settings**.
 
 The first recognition says "Loading OCR models". After that a full screen takes about 0.4 seconds.
 
 ## Languages
 
-* **English**: the best accuracy for English and other Latin-script languages. Russian text is not read in this mode.
-* **Russian**: reads both Russian and English text, but English slightly worse than in the English mode.
+The models read alphabets rather than single languages.
 
-By default the language follows the NVDA interface language.
+* **Latin**: English, German, French, Spanish, Polish and other Latin-script languages. The best accuracy. Cyrillic is not read in this mode.
+* **Cyrillic**: Russian, Ukrainian, Belarusian and Bulgarian, plus English (slightly worse than in Latin mode). Serbian and Macedonian letters are not supported.
+
+By default the mode follows the NVDA interface language.
 
 ## Settings
 
 NVDA menu, Preferences, Settings, category "Paddle OCR".
 
-* **Recognition language**: same as NVDA, English or Russian.
+* **Recognition language**: same as NVDA, Latin or Cyrillic.
 * **Periodically refresh recognized content**: the result window updates itself while open. Off by default.
 * **Automatically say all when recognition finishes**. On by default.
 
