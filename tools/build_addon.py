@@ -3,6 +3,7 @@
 Run: .venv/Scripts/python tools/build_addon.py
 Before the first build: tools/fetch_models.py, then tools/fetch_libs.py.
 """
+
 import ast
 import re
 import struct
@@ -65,7 +66,10 @@ def main():
 	# Remind about untranslated strings so English does not show up in the Russian interface.
 	used = set()
 	for f in plugin.glob("*.py"):
-		used |= {ast.literal_eval(s) for s in re.findall(r'_\(("(?:[^"\\]|\\.)*")\)', f.read_text(encoding="utf-8"))}
+		used |= {
+			ast.literal_eval(s)
+			for s in re.findall(r'_\(("(?:[^"\\]|\\.)*")\)', f.read_text(encoding="utf-8"))
+		}
 	for po in ADDON.glob("locale/*/LC_MESSAGES/nvda.po"):
 		for s in sorted(used - set(parse_po(po))):
 			print(f"Нет перевода ({po.parent.parent.name}): {s}")

@@ -2,6 +2,7 @@
 
 Run: .venv/Scripts/python -m pytest tests/
 """
+
 import sys
 from pathlib import Path
 
@@ -12,7 +13,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 PLUGIN = ROOT / "addon" / "globalPlugins" / "paddleOcr"
 sys.path.insert(0, str(PLUGIN))
-import engine  # noqa: E402
+import engine
 
 MODELS = PLUGIN / "models"
 
@@ -22,7 +23,9 @@ def ocr():
 	if not (MODELS / "rec_eslav_v5").is_dir():
 		pytest.skip("No models in the add-on: run tools/fetch_libs.py")
 	rec = MODELS / "rec_eslav_v5"
-	return engine.OcrEngine(MODELS / "det_v6_tiny" / "inference.onnx", rec / "inference.onnx", rec / "inference.yml")
+	return engine.OcrEngine(
+		MODELS / "det_v6_tiny" / "inference.onnx", rec / "inference.onnx", rec / "inference.yml"
+	)
 
 
 def test_bgra_to_bgr():
@@ -34,16 +37,19 @@ def test_bgra_to_bgr():
 	assert np.array_equal(out, bgr)
 
 
-@pytest.mark.parametrize("src, expected", [
-	("DIREcTorY", "DIRECTORY"),
-	("НАСТРоЙКИ", "НАСТРОЙКИ"),
-	("iPhone", "iPhone"),
-	("GitHub", "GitHub"),
-	("IDs", "IDs"),
-	("macOS", "macOS"),
-	("NVDAObjects", "NVDAObjects"),
-	("Settings", "Settings"),
-])
+@pytest.mark.parametrize(
+	"src, expected",
+	[
+		("DIREcTorY", "DIRECTORY"),
+		("НАСТРоЙКИ", "НАСТРОЙКИ"),
+		("iPhone", "iPhone"),
+		("GitHub", "GitHub"),
+		("IDs", "IDs"),
+		("macOS", "macOS"),
+		("NVDAObjects", "NVDAObjects"),
+		("Settings", "Settings"),
+	],
+)
 def test_fix_case(src, expected):
 	assert engine._fix_case(src) == expected
 
@@ -56,7 +62,15 @@ def test_word_positions(ocr, size):
 	# Words at known places: (text, left edge, baseline).
 	placed = [("Hello", 100, 200), ("World", 700, 200), ("Settings", 1200, 600)]
 	for text, x, y in placed:
-		cv2.putText(img, text, (int(x * k), int(y * k)), cv2.FONT_HERSHEY_SIMPLEX, 1.2 * k, (0, 0, 0), max(1, int(2 * k)))
+		cv2.putText(
+			img,
+			text,
+			(int(x * k), int(y * k)),
+			cv2.FONT_HERSHEY_SIMPLEX,
+			1.2 * k,
+			(0, 0, 0),
+			max(1, int(2 * k)),
+		)
 	words = [wd for line in ocr.recognize(img) for wd in line]
 	for text, x, y in placed:
 		found = [wd for wd in words if wd["text"] == text]
@@ -75,11 +89,25 @@ def test_latin_only():
 	assert not any(engine.latin_only(c) for c in "平γП∏")
 
 
-@pytest.mark.parametrize("raw, fixed", [
-	("AlI", "All"), ("AII", "All"), ("FiII", "Fill"), ("AddIn", "AddIn"), ("ID", "ID"),
-	("AI", "AI"), ("III", "III"), ("Illegal", "Illegal"), ("iPhone", "iPhone"), ("HeIlo", "HeIlo"),
-	("TlGHT", "TIGHT"), ("MlDl", "MIDI"), ("Al", "Al"), ("tIGHT", "tIGHT"),
-])
+@pytest.mark.parametrize(
+	"raw, fixed",
+	[
+		("AlI", "All"),
+		("AII", "All"),
+		("FiII", "Fill"),
+		("AddIn", "AddIn"),
+		("ID", "ID"),
+		("AI", "AI"),
+		("III", "III"),
+		("Illegal", "Illegal"),
+		("iPhone", "iPhone"),
+		("HeIlo", "HeIlo"),
+		("TlGHT", "TIGHT"),
+		("MlDl", "MIDI"),
+		("Al", "Al"),
+		("tIGHT", "tIGHT"),
+	],
+)
 def test_fix_il(raw, fixed):
 	assert engine._fix_il(raw) == fixed
 
@@ -87,7 +115,12 @@ def test_fix_il(raw, fixed):
 def test_pick_twin_script():
 	# "Сору" among English words → Latin; "Bce" among Russian ones → Cyrillic; unclear with no neighbours → by screen.
 	w = lambda text, alt=None: {"text": text, **({"alt": alt} if alt else {})}
-	items = [[w("Сору", "Copy"), w("Paste")], [w("Bce", "Все"), w("программы")], [w("Туре", "Type")], [w("Edit")]]
+	items = [
+		[w("Сору", "Copy"), w("Paste")],
+		[w("Bce", "Все"), w("программы")],
+		[w("Туре", "Type")],
+		[w("Edit")],
+	]
 	engine._pick_twin_script(items)
 	assert [x["text"] for ws in items for x in ws] == ["Copy", "Paste", "Все", "программы", "Type", "Edit"]
 	assert not any("alt" in x for ws in items for x in ws)

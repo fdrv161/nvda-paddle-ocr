@@ -7,6 +7,7 @@ Run: .venv/Scripts/python tools/fetch_libs.py
    (download them first: tools/fetch_models.py).
 Running it again rebuilds the add-on lib/ and models/ from scratch.
 """
+
 import shutil
 import subprocess
 import sys
@@ -25,11 +26,25 @@ MODEL_FILES = ("inference.onnx", "inference.yml")
 def fetch_wheels():
 	WHEELS.mkdir(parents=True, exist_ok=True)
 	# --no-deps: onnxruntime's Python dependencies (protobuf, sympy etc.) are not needed to run a model.
-	subprocess.run([
-		sys.executable, "-m", "pip", "download", "--quiet", "--no-deps",
-		"--only-binary=:all:", "--python-version", "3.13", "--platform", "win_amd64",
-		"--dest", str(WHEELS), *PACKAGES,
-	], check=True)
+	subprocess.run(
+		[
+			sys.executable,
+			"-m",
+			"pip",
+			"download",
+			"--quiet",
+			"--no-deps",
+			"--only-binary=:all:",
+			"--python-version",
+			"3.13",
+			"--platform",
+			"win_amd64",
+			"--dest",
+			str(WHEELS),
+			*PACKAGES,
+		],
+		check=True,
+	)
 
 
 def unpack_wheels():
@@ -40,7 +55,9 @@ def unpack_wheels():
 	for pkg in PACKAGES:
 		name, version = pkg.split("==")
 		pattern = f"{name.replace('-', '_')}-{version}-*cp313*win_amd64.whl"
-		found = list(WHEELS.glob(pattern)) or list(WHEELS.glob(f"{name.replace('-', '_')}-{version}-*abi3*win_amd64.whl"))
+		found = list(WHEELS.glob(pattern)) or list(
+			WHEELS.glob(f"{name.replace('-', '_')}-{version}-*abi3*win_amd64.whl")
+		)
 		if not found:
 			raise SystemExit(f"Не найдено колесо {pattern} в {WHEELS}")
 		with zipfile.ZipFile(found[0]) as z:
@@ -54,8 +71,16 @@ def unpack_wheels():
 					dest.write_bytes(z.read(item))
 		print(f"Распаковано: {found[0].name}")
 	# Tests, C headers and tools are not needed in the add-on.
-	for junk in ("numpy/_core/tests", "numpy/tests", "numpy/_core/include", "onnxruntime/tools",
-			"onnxruntime/transformers", "onnxruntime/quantization", "onnxruntime/datasets", "cv2/data"):
+	for junk in (
+		"numpy/_core/tests",
+		"numpy/tests",
+		"numpy/_core/include",
+		"onnxruntime/tools",
+		"onnxruntime/transformers",
+		"onnxruntime/quantization",
+		"onnxruntime/datasets",
+		"cv2/data",
+	):
 		shutil.rmtree(lib / junk, ignore_errors=True)
 	# OpenCV needs ffmpeg only for video and loads it only when working with video; it is ~1/4 of cv2.
 	for f in (lib / "cv2").glob("opencv_videoio_ffmpeg*.dll"):

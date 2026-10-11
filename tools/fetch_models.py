@@ -7,6 +7,7 @@ Running it again does not re-download what is already there.
 At the end writes models/manifest.json with sizes and sha256, used later to
 check that exactly those files went into the add-on.
 """
+
 import hashlib
 import json
 import sys
@@ -71,8 +72,10 @@ def main(names):
 			# The model on Hugging Face may have been replaced: then stop rather than silently build with another model.
 			known = manifest.get(name, {}).get("files", {}).get(fname, {}).get("sha256")
 			if known and known != entry["files"][fname]["sha256"]:
-				print(f"Ошибка: {name}/{fname} не совпадает с models/manifest.json (хэш другой). "
-					"Проверьте модель; если замена нужна, удалите её запись из manifest.json.")
+				print(
+					f"Ошибка: {name}/{fname} не совпадает с models/manifest.json (хэш другой). "
+					"Проверьте модель; если замена нужна, удалите её запись из manifest.json."
+				)
 				return 1
 			done += 1
 			print(f"Готово {done} из {total}: {name}/{fname}")

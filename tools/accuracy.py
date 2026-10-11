@@ -10,6 +10,7 @@ Run:
 --set changes an engine setting (a name from engine.py), --show prints that many worst lines.
 Output is line by line, without tables.
 """
+
 import argparse
 import random
 import statistics
@@ -22,7 +23,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "addon" / "globalPlugins" / "paddleOcr"))
-import engine  # noqa: E402
+import engine
 
 MODELS = ROOT / "addon" / "globalPlugins" / "paddleOcr" / "models"
 FONTS = ["segoeui.ttf", "tahoma.ttf", "arial.ttf", "verdana.ttf"]
@@ -50,7 +51,9 @@ Snap to Grid|Zoom In|Zoom Out|Import MIDI File|Project Name: Untitled_01|Audio E
 CPU 12% Disk 3%|Inbox (24)|Search messages|Mark all as read|Archive|Account Settings|All
 Notifications|Dark Mode|Language: English|Keyboard Shortcuts|Help Center|Report a Problem
 Visit www.example.com for details|support@example.com|Illegal file name|Fill level 100%
-Allow all cookies|Install Illustrator|Copy|Paste|Type|Export Copy|Bells and Vibes|Pads + Strings|Electronic Mayhem""".replace("\n", "|").split("|")
+Allow all cookies|Install Illustrator|Copy|Paste|Type|Export Copy|Bells and Vibes|Pads + Strings|Electronic Mayhem""".replace(
+	"\n", "|"
+).split("|")
 
 RU = """Файл|Правка|Вид|Настройки|Открыть недавние файлы|Сохранить как...|Проверить обновления
 Параметры звука|Устройство вывода: Динамики|Частота дискретизации 48000 Гц|Громкость 75%
@@ -62,7 +65,9 @@ RU = """Файл|Правка|Вид|Настройки|Открыть неда�
 Сочетания клавиш|Справка и поддержка|Сообщить о проблеме|Свободно 12,4 ГБ из 256 ГБ
 Копирование файлов: осталось 3 минуты|Ещё|Разрешить доступ к микрофону|Все программы
 Папка «Документы»|Щёлкните, чтобы продолжить|Объём памяти|Съёмка, вьюга, жёлтый хвощ
-Вы уверены, что хотите выйти?|Сохранить изменения перед закрытием?|Новая вкладка|Все|Сохранить все|Все закладки""".replace("\n", "|").split("|")
+Вы уверены, что хотите выйти?|Сохранить изменения перед закрытием?|Новая вкладка|Все|Сохранить все|Все закладки""".replace(
+	"\n", "|"
+).split("|")
 
 MIXED = """Открыть в Visual Studio Code|Плагин Omnisphere 2.8|Версия NVDA 2026.3|Скачать Firefox
 Настройки Wi-Fi|Файл README.md|Нажмите Ctrl+C, чтобы скопировать|Подключено: Bluetooth Headphones
@@ -134,11 +139,19 @@ def main():
 	for s in args.set:
 		name, value = s.split("=", 1)
 		old = getattr(engine, name)
-		setattr(engine, name, type(old)(value) if not isinstance(old, bool) else value.lower() in ("1", "true", "yes"))
+		setattr(
+			engine,
+			name,
+			type(old)(value) if not isinstance(old, bool) else value.lower() in ("1", "true", "yes"),
+		)
 	# Models not in the add-on (small, medium) are taken from the shared models/ folder.
 	det, rec = (MODELS / m if (MODELS / m).exists() else ROOT / "models" / m for m in (args.det, args.rec))
-	eng = engine.OcrEngine(det / "inference.onnx", rec / "inference.onnx", rec / "inference.yml",
-		allowed=engine.latin_only if args.latin else None)
+	eng = engine.OcrEngine(
+		det / "inference.onnx",
+		rec / "inference.onnx",
+		rec / "inference.yml",
+		allowed=engine.latin_only if args.latin else None,
+	)
 	screens = make_screens()
 	errs, lens, times, rows = {}, {}, [], []
 	totalExtra = 0
@@ -156,13 +169,15 @@ def main():
 				errs[key] = errs.get(key, 0) + e
 				lens[key] = lens.get(key, 0) + len(text)
 			rows.append((e / len(text), text, hyp, name))
-	print(f"Модели {args.det} + {args.rec}{', только латиница' if args.latin else ''}, настройки: {' '.join(args.set) or 'обычные'}")
+	print(
+		f"Модели {args.det} + {args.rec}{', только латиница' if args.latin else ''}, настройки: {' '.join(args.set) or 'обычные'}"
+	)
 	print(f"Картинок {len(screens)}, строк {len(rows)}, среднее время {statistics.mean(times):.2f} с")
 	for key in errs:
 		print(f"{key}: ошибок {100 * errs[key] / lens[key]:.2f}%")
 	perfect = sum(1 for r in rows if r[0] == 0)
 	print(f"Строк без единой ошибки: {perfect} из {len(rows)}; лишних слов вне строк: {totalExtra}")
-	for r, text, hyp, name in sorted(rows, reverse=True)[:args.show]:
+	for r, text, hyp, name in sorted(rows, reverse=True)[: args.show]:
 		print(f"[{name}] надо «{text}», получено «{hyp}»")
 
 

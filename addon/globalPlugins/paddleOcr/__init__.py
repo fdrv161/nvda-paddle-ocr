@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 """Paddle OCR: recognizes screen text with PaddleOCR models, like NVDA+R with Windows OCR."""
+
 import addonHandler
 import config
 import globalPluginHandler
@@ -40,7 +41,9 @@ class PaddleOcrPanel(SettingsPanel):
 		names += [languageName(lang) for lang in LANGUAGES]
 		self.languageList = sHelper.addLabeledControl(
 			# Translators: Label of the recognition language list in Paddle OCR settings.
-			_("Recognition &language:"), wx.Choice, choices=names,
+			_("Recognition &language:"),
+			wx.Choice,
+			choices=names,
 		)
 		lang = conf["language"]
 		self.languageList.SetSelection(self._langs.index(lang) if lang in self._langs else 0)
@@ -90,6 +93,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		from contentRecog import recogUi
 
 		from .recognizer import PaddleOcr
+
 		if self._recognizer is None:
 			self._recognizer = PaddleOcr()
 		# From here on everything is as with Windows OCR: capture (also with Screen Curtain), result window, clicking words.

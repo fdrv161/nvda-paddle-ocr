@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 """Recognizer for NVDA: takes a capture from contentRecog and returns a LinesWordsResult."""
+
 import ctypes
 import os
 import sys
@@ -40,6 +41,7 @@ def getLanguage(auto=False):
 		return lang
 	return "ru" if languageHandler.getLanguage().startswith("ru") else "en"
 
+
 # One engine for the whole NVDA session: loading is slow, but requests after it are fast.
 _engine = None
 _engineLang = None
@@ -55,6 +57,7 @@ def _getEngine(lang):
 		if lib not in sys.path:
 			sys.path.append(lib)
 		from . import engine
+
 		det, rec, latinOnly = LANGUAGES[lang]
 		_engine = None  # Release the old engine first so two are never in memory at once.
 		_engine = engine.OcrEngine(
@@ -96,8 +99,10 @@ class PaddleOcr(ContentRecognizer):
 		token = object()
 		self._current = token
 		threading.Thread(
-			target=self._run, args=(buf, imageInfo, onResult, token, lang),
-			name="paddleOcr", daemon=True,
+			target=self._run,
+			args=(buf, imageInfo, onResult, token, lang),
+			name="paddleOcr",
+			daemon=True,
 		).start()
 
 	def _run(self, buf, imageInfo, onResult, token, lang):
@@ -107,6 +112,7 @@ class PaddleOcr(ContentRecognizer):
 			try:
 				eng = _getEngine(lang)
 				from . import engine
+
 				bgr = engine.bgra_to_bgr(buf, imageInfo.recogWidth, imageInfo.recogHeight)
 				result = LinesWordsResult(eng.recognize(bgr), imageInfo)
 			except Exception as e:

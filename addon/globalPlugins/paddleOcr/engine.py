@@ -8,13 +8,14 @@ Imports nothing from NVDA, so it can be tested with plain Python.
 Input is a BGR image (numpy, uint8, h×w×3). Output is the screen lines; each line is
 a list of words with coordinates in pixels of the same image (NVDA LinesWordsResult format).
 """
+
+import itertools
 import math
 from pathlib import Path
 
 import cv2
 import numpy as np
 import onnxruntime as ort
-import itertools
 
 # Detector post-processing settings from the inference.yml of the PP-OCRv6 models.
 DET_THRESH = 0.2
@@ -156,7 +157,7 @@ class Reader:
 		order = sorted(range(len(crops)), key=lambda i: crops[i].shape[1] / crops[i].shape[0])
 		results = [None] * len(crops)
 		for start in range(0, len(order), REC_BATCH):
-			idx = order[start:start + REC_BATCH]
+			idx = order[start : start + REC_BATCH]
 			maxRatio = max(crops[i].shape[1] / crops[i].shape[0] for i in idx)
 			batchW = max(math.ceil(REC_HEIGHT * maxRatio), REC_HEIGHT)
 			batch = np.zeros((len(idx), 3, REC_HEIGHT, batchW), dtype=np.float32)
@@ -168,7 +169,9 @@ class Reader:
 				batch[j, :, :, :rw] = ((img / 255.0 - 0.5) / 0.5).transpose(2, 0, 1)
 				widths.append(rw)
 			last = start + REC_BATCH >= len(order)
-			probs = self._rec.run(None, {self._recInput: batch}, self._lastRunOpts if last else self._runOpts)[0]
+			probs = self._rec.run(
+				None, {self._recInput: batch}, self._lastRunOpts if last else self._runOpts
+			)[0]
 			if self._keep is not None:
 				probs = probs[:, :, self._keep]
 			for j, i in enumerate(idx):
@@ -203,7 +206,10 @@ class Reader:
 					wx0 = x0 + int(cur[0][1] * toBox)
 					wx1 = min(x1, x0 + math.ceil((cur[-1][1] + 1) * toBox))
 					word = {
-						"x": wx0, "y": y0, "width": max(1, wx1 - wx0), "height": y1 - y0,
+						"x": wx0,
+						"y": y0,
+						"width": max(1, wx1 - wx0),
+						"height": y1 - y0,
 						"text": _fix_case(_fix_il("".join(c for c, _ in cur))),
 					}
 					alt = self._twin_spelling(cur, prob)
@@ -275,7 +281,11 @@ def _fix_il(text):
 	if len(text) >= 3 and text[0].isupper() and text[0] not in "Il" and set(text[1:]) <= {"I", "l"}:
 		return text[0] + "l" * (len(text) - 1)
 	letters = [c for c in text if c.isalpha()]
-	if "l" in letters and sum(c.isupper() for c in letters) >= 2 and all(c.isupper() or c == "l" for c in letters):
+	if (
+		"l" in letters
+		and sum(c.isupper() for c in letters) >= 2
+		and all(c.isupper() or c == "l" for c in letters)
+	):
 		return text.replace("l", "I")
 	# An all-caps word with one stray lowercase letter ("tIGHT") is left alone: _fix_case will fix it.
 	if "I" not in text or sum(c.isupper() and c != "I" for c in letters) >= 2:
@@ -284,7 +294,12 @@ def _fix_il(text):
 	# Left to right: in "FiII" the first I becomes l, and then the second one also follows a lowercase letter.
 	for i in range(1, len(chars)):
 		nxt = chars[i + 1] if i + 1 < len(chars) else ""
-		if chars[i] == "I" and chars[i - 1].islower() and _script(chars[i - 1]) == "latin" and not nxt.islower():
+		if (
+			chars[i] == "I"
+			and chars[i - 1].islower()
+			and _script(chars[i - 1]) == "latin"
+			and not nxt.islower()
+		):
 			chars[i] = "l"
 	return "".join(chars)
 
@@ -307,7 +322,7 @@ def _fix_case(text):
 
 
 # Letters that look the same in Cyrillic and Latin (the model also confuses т and m).
-_TWINS = set("АВЕКМНОРСТХУаеорсхукт" "ABEKMHOPCTXYaeopcxykm")
+_TWINS = set("АВЕКМНОРСТХУаеорсхуктABEKMHOPCTXYaeopcxykm")
 
 
 def _word_script(text):
@@ -323,6 +338,7 @@ def _pick_twin_script(items):
 	"""Words made only of twin letters take the script of their line neighbours, or, with no neighbours,
 	the script of most words on the screen: "Сору Paste" → "Copy Paste", "Bce программы" → "Все программы".
 	"""
+
 	def majority(words):
 		counts = {"latin": 0, "cyr": 0}
 		for w in words:
@@ -354,7 +370,6 @@ def latin_only(c):
 	return o < 0x250 or 0x2000 <= o < 0x2200
 
 
-
 def bgra_to_bgr(buf, width, height):
 	"""NVDA screenshot (RGBQUAD bytes: blue, green, red, unused) → BGR image for the engine."""
 	return np.frombuffer(buf, dtype=np.uint8).reshape(height, width, 4)[:, :, :3].copy()
@@ -384,7 +399,7 @@ def _db_boxes(pred, sx, sy, w, h):
 		# Confidence is the mean probability inside the contour (as in PaddleOCR, fast mode).
 		mask = np.zeros((bh, bw), dtype=np.uint8)
 		cv2.drawContours(mask, [cnt - (bx, by)], -1, 1, -1)
-		if cv2.mean(pred[by:by + bh, bx:bx + bw], mask)[0] < DET_BOX_THRESH:
+		if cv2.mean(pred[by : by + bh, bx : bx + bw], mask)[0] < DET_BOX_THRESH:
 			continue
 		# The detector finds the "shrunk" middle of a line; expand it back (unclip).
 		# For a rectangle, distance = area * ratio / perimeter.
