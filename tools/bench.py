@@ -1,8 +1,8 @@
-"""Замер скорости и памяти движка на скриншотах.
+"""Measures engine speed and memory on screenshots.
 
-Запуск: .venv/Scripts/python tools/bench.py [картинки...]
-Без аргументов берёт tests/screens/*.png; если их нет — рисует синтетический экран 1920×1080.
-Вывод построчный, без таблиц.
+Run: .venv/Scripts/python tools/bench.py [images...]
+Without arguments takes tests/screens/*.png; if there are none, draws a synthetic 1920×1080 screen.
+Output is line by line, without tables.
 """
 import ctypes
 import ctypes.wintypes
@@ -35,7 +35,7 @@ class _Mem(ctypes.Structure):
 
 
 def rss_mb():
-	# Рабочий набор процесса (сколько занимает в оперативке) через WinAPI, без psutil.
+	# Process working set (how much RAM it takes) via WinAPI, without psutil.
 	m = _Mem()
 	m.cb = ctypes.sizeof(m)
 	k32 = ctypes.WinDLL("kernel32")

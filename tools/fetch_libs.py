@@ -1,11 +1,11 @@
-"""Готовит содержимое дополнения: библиотеки под Python NVDA и нужные модели.
+"""Prepares the add-on contents: libraries for the NVDA Python and the needed models.
 
-Запуск: .venv/Scripts/python tools/fetch_libs.py
-1. Скачивает колёса cp313 win_amd64 (NVDA 2026.3 работает на Python 3.13, а .venv может быть новее)
-   и распаковывает их в addon/globalPlugins/paddleOcr/lib/.
-2. Копирует выбранные на этапе 0 модели из models/ в addon/globalPlugins/paddleOcr/models/
-   (сначала скачать их: tools/fetch_models.py).
-Повторный запуск пересобирает lib/ и models/ дополнения с нуля.
+Run: .venv/Scripts/python tools/fetch_libs.py
+1. Downloads cp313 win_amd64 wheels (NVDA 2026.3 runs Python 3.13, while .venv may be newer)
+   and unpacks them into addon/globalPlugins/paddleOcr/lib/.
+2. Copies the chosen models from models/ into addon/globalPlugins/paddleOcr/models/
+   (download them first: tools/fetch_models.py).
+Running it again rebuilds the add-on lib/ and models/ from scratch.
 """
 import shutil
 import subprocess
@@ -24,7 +24,7 @@ MODEL_FILES = ("inference.onnx", "inference.yml")
 
 def fetch_wheels():
 	WHEELS.mkdir(parents=True, exist_ok=True)
-	# --no-deps: питоновские зависимости onnxruntime (protobuf, sympy и т.п.) для запуска модели не нужны.
+	# --no-deps: onnxruntime's Python dependencies (protobuf, sympy etc.) are not needed to run a model.
 	subprocess.run([
 		sys.executable, "-m", "pip", "download", "--quiet", "--no-deps",
 		"--only-binary=:all:", "--python-version", "3.13", "--platform", "win_amd64",
@@ -44,7 +44,7 @@ def unpack_wheels():
 		if not found:
 			raise SystemExit(f"Не найдено колесо {pattern} в {WHEELS}")
 		with zipfile.ZipFile(found[0]) as z:
-			# Папки .dist-info для работы не нужны; оставляем из них только лицензии (у numpy они только там).
+			# .dist-info folders are not needed at runtime; keep only the licenses from them (numpy has them only there).
 			for item in z.namelist():
 				if ".dist-info/" not in item:
 					z.extract(item, lib)
@@ -53,11 +53,11 @@ def unpack_wheels():
 					dest.parent.mkdir(parents=True, exist_ok=True)
 					dest.write_bytes(z.read(item))
 		print(f"Распаковано: {found[0].name}")
-	# Тесты, заголовки C и инструменты в дополнении не нужны.
+	# Tests, C headers and tools are not needed in the add-on.
 	for junk in ("numpy/_core/tests", "numpy/tests", "numpy/_core/include", "onnxruntime/tools",
 			"onnxruntime/transformers", "onnxruntime/quantization", "onnxruntime/datasets", "cv2/data"):
 		shutil.rmtree(lib / junk, ignore_errors=True)
-	# ffmpeg нужен OpenCV только для видео и грузится лишь при работе с видео; это ~1/4 размера cv2.
+	# OpenCV needs ffmpeg only for video and loads it only when working with video; it is ~1/4 of cv2.
 	for f in (lib / "cv2").glob("opencv_videoio_ffmpeg*.dll"):
 		f.unlink()
 

@@ -1,4 +1,4 @@
-"""Paddle OCR: распознавание текста на экране моделями PaddleOCR, как NVDA+R у Windows OCR."""
+"""Paddle OCR: recognizes screen text with PaddleOCR models, like NVDA+R with Windows OCR."""
 import addonHandler
 import config
 import globalPluginHandler
@@ -10,12 +10,12 @@ from gui import guiHelper
 from gui.settingsDialogs import NVDASettingsDialog, SettingsPanel
 from scriptHandler import script
 
-# recognizer.py лёгкий: тяжёлые библиотеки и модели он грузит только при первом распознавании.
+# recognizer.py is light: it loads the heavy libraries and models only on the first recognition.
 from .recognizer import LANGUAGES, getLanguage, languageName
 
 addonHandler.initTranslation()
 
-# Пустой язык — «как язык NVDA» (см. recognizer.getLanguage). Остальное — как у Windows OCR.
+# An empty language means "same as NVDA" (see recognizer.getLanguage). The rest mirrors Windows OCR.
 config.conf.spec["paddleOcr"] = {
 	"language": "string(default='')",
 	"autoRefresh": "boolean(default=false)",
@@ -64,9 +64,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 	def __init__(self):
 		super().__init__()
-		# Распознаватель создаём при первой команде, чтобы не тормозить старт NVDA.
+		# Create the recognizer on the first command so NVDA startup is not slowed down.
 		self._recognizer = None
-		# На защищённом экране настройки менять нельзя.
+		# Settings cannot be changed on the secure screen.
 		if not globalVars.appArgs.secure:
 			NVDASettingsDialog.categoryClasses.append(PaddleOcrPanel)
 
@@ -80,14 +80,14 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		description=_("Recognizes the content of the current navigator object with Paddle OCR"),
 	)
 	def script_recognizeNavigatorObject(self, gesture):
-		# На защищённом экране (вход в систему, UAC) ничего не делаем.
+		# Do nothing on the secure screen (sign-in, UAC).
 		if globalVars.appArgs.secure:
 			return
 		from contentRecog import recogUi
 		from .recognizer import PaddleOcr
 		if self._recognizer is None:
 			self._recognizer = PaddleOcr()
-		# Дальше всё как у Windows OCR: захват (в том числе при шторке), окно результата, клик по словам.
+		# From here on everything is as with Windows OCR: capture (also with Screen Curtain), result window, clicking words.
 		recogUi.recognizeNavigatorObject(self._recognizer)
 
 	@script(

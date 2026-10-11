@@ -1,8 +1,8 @@
-"""Движок OCR на моделях PaddleOCR (детектор DB + распознаватель CTC) через onnxruntime.
+"""OCR engine on PaddleOCR models (DB detector + CTC recognizer) via onnxruntime.
 
-Ничего не импортирует из NVDA, поэтому его можно проверять обычным Python.
-Вход — картинка BGR (numpy, uint8, h×w×3). Выход — строки экрана, каждая строка —
-список слов с координатами в пикселях этой же картинки (формат LinesWordsResult NVDA).
+Imports nothing from NVDA, so it can be tested with plain Python.
+Input is a BGR image (numpy, uint8, h×w×3). Output is the screen lines; each line is
+a list of words with coordinates in pixels of the same image (NVDA LinesWordsResult format).
 """
 import math
 from pathlib import Path
@@ -11,30 +11,32 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
-# Настройки постобработки детектора из inference.yml моделей PP-OCRv6.
+# Detector post-processing settings from the inference.yml of the PP-OCRv6 models.
 DET_THRESH = 0.2
 DET_BOX_THRESH = 0.45
 DET_UNCLIP_RATIO = 1.4
 DET_MIN_SIZE = 3
-# Больше этого по длинной стороне картинку для детектора уменьшаем.
-# Экран уменьшать вредно (мелкий шрифт пропадает), так что предел высокий — только против 8K и т.п.
+# Images with a longer side above this are downscaled for the detector.
+# Downscaling a screen hurts (small fonts vanish), so the limit is high: only for 8K and the like.
 DET_MAX_SIDE = 4000
 REC_HEIGHT = 48
-# По замерам пачка 4–8 быстрее всего; больше — медленнее (лишнее добивание по ширине).
+# Measured: batches of 4–8 are fastest; larger ones are slower (more width padding).
 REC_BATCH = 4
-# Строки, в которых распознаватель не уверен (обычно иконки и рамки), выбрасываем.
+# Lines the recognizer is unsure about (usually icons and borders) are dropped.
 REC_MIN_SCORE = 0.5
-# Куски одной высоты с промежутком больше стольких высот строки считаем разными строками (колонками).
+# Pieces at the same height separated by more than this many line heights are separate lines (columns).
 LINE_GAP = 10
 
 _DET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 _DET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+_DET_SCALE = 1.0 / (255.0 * _DET_STD)
+_DET_SHIFT = _DET_MEAN / _DET_STD
 
 
 def _load_charset(ymlPath):
-	"""Достаёт словарь символов из inference.yml без библиотеки yaml.
+	"""Reads the character dictionary from inference.yml without a yaml library.
 
-	Словарь там записан списком строк вида "  - 'а'" после "character_dict:".
+	The dictionary is a list of lines like "  - 'a'" after "character_dict:".
 	"""
 	chars = []
 	inDict = False
@@ -43,19 +45,19 @@ def _load_charset(ymlPath):
 			inDict = True
 			continue
 		if inDict:
-			# Только ASCII-пробелы: strip() съел бы символы-пробелы из самого словаря (например, U+3000).
+			# ASCII spaces only: strip() would eat space characters from the dictionary itself (e.g. U+3000).
 			s = line.lstrip(" ")
 			if not s.startswith("- "):
 				break
 			chars.append(_yaml_scalar(s[2:]))
 	if not chars:
-		raise ValueError(f"В {ymlPath} нет character_dict")
+		raise ValueError(f"No character_dict in {ymlPath}")
 	return chars
 
 
 def _yaml_scalar(s):
-	# Символы в yml бывают в одинарных кавычках ('' внутри = одна кавычка),
-	# в двойных (с escape-последовательностями вроде "\\") или без кавычек.
+	# Characters in the yml may be in single quotes ('' inside means one quote),
+	# in double quotes (with escape sequences like "\\") or unquoted.
 	if len(s) >= 2 and s[0] == s[-1] == "'":
 		return s[1:-1].replace("''", "'")
 	if len(s) >= 2 and s[0] == s[-1] == '"':
@@ -73,14 +75,14 @@ def _session(path, threads):
 
 
 def _run_options():
-	# После каждого запуска отдаём системе рабочую память, иначе пик большого экрана висит до конца.
+	# Return working memory to the system after each run, otherwise the peak of a large screen stays until exit.
 	opts = ort.RunOptions()
 	opts.add_run_config_entry("memory.enable_memory_arena_shrinkage", "cpu:0")
 	return opts
 
 
 class OcrEngine:
-	"""Детектор + распознаватель. allowed(c) — какие символы распознавателю можно выдавать (None — все)."""
+	"""Detector + recognizer. allowed(c) tells which characters the recognizer may output (None means all)."""
 
 	def __init__(self, detPath, recPath, recYml, threads=0, allowed=None):
 		self._det = _session(detPath, threads)
@@ -89,7 +91,7 @@ class OcrEngine:
 		self._runOpts = _run_options()
 
 	def recognize(self, bgr):
-		"""Возвращает список строк; строка — список слов {x, y, width, height, text}."""
+		"""Returns a list of lines; a line is a list of words {x, y, width, height, text}."""
 		boxes = self._detect(bgr)
 		if not boxes:
 			return []
@@ -97,45 +99,55 @@ class OcrEngine:
 		_pick_twin_script(items)
 		return _group_lines(items)
 
-	# --- детектор ---
+	# --- detector ---
 
 	def _detect(self, bgr):
 		h, w = bgr.shape[:2]
 		scale = min(1.0, DET_MAX_SIDE / max(h, w))
-		# Модель требует стороны, кратные 32.
+		# The model needs sides that are multiples of 32.
 		rh = max(32, int(round(h * scale / 32)) * 32)
 		rw = max(32, int(round(w * scale / 32)) * 32)
 		img = cv2.resize(bgr, (rw, rh)) if (rw, rh) != (w, h) else bgr
-		x = (img.astype(np.float32) / 255.0 - _DET_MEAN) / _DET_STD
-		x = x.transpose(2, 0, 1)[None]
+		# (pixel/255 - mean)/std per channel straight into the 1×3×h×w layout: no intermediate float
+		# copies of the whole image, which is noticeable on a 1080p screen.
+		x = np.empty((1, 3, rh, rw), dtype=np.float32)
+		for c in range(3):
+			np.multiply(img[:, :, c], _DET_SCALE[c], out=x[0, c], dtype=np.float32)
+			x[0, c] -= _DET_SHIFT[c]
 		pred = self._det.run(None, {self._detInput: x}, self._runOpts)[0][0, 0]
 		return _db_boxes(pred, w / rw, h / rh, w, h)
 
 
 class Reader:
-	"""Распознаватель строк (CTC) одной модели."""
+	"""Line recognizer (CTC) of one model."""
 
 	def __init__(self, recPath, recYml, threads=0, allowed=None):
 		self._rec = _session(recPath, threads)
 		self._recInput = self._rec.get_inputs()[0].name
-		# Индекс 0 — «пусто» (blank) в CTC, в конце модели знают ещё пробел.
+		# Index 0 is the CTC blank; the models also know a space at the end.
 		self._chars = ["", *_load_charset(recYml), " "]
 		classes = self._rec.get_outputs()[0].shape[-1]
 		if isinstance(classes, int) and classes != len(self._chars):
-			raise ValueError(f"Словарь ({len(self._chars)}) не совпадает с моделью ({classes})")
-		# Запрещённые символы (allowed(c) ложно) при расшифровке не выбираются никогда.
-		self._banned = None
+			raise ValueError(f"Dictionary ({len(self._chars)}) does not match the model ({classes})")
+		# Banned characters (allowed(c) is false) are never chosen when decoding.
+		# Keep only the allowed columns: the multilingual model has ~600 of 18k, so decoding
+		# is many times cheaper, and the chosen character is the same as with banned ones zeroed.
+		self._keep = None
 		if allowed:
-			self._banned = np.array([i > 0 and not allowed(c) for i, c in enumerate(self._chars)])
-		# Номера латинских и кириллических букв в словаре — для исправления смешанных слов.
+			self._keep = np.array([i for i, c in enumerate(self._chars) if i == 0 or allowed(c)])
+			self._chars = [self._chars[i] for i in self._keep]
+		# Indices of Latin and Cyrillic letters in the dictionary, for fixing mixed-script words.
 		self._latin = np.array([i for i, c in enumerate(self._chars) if _script(c) == "latin"])
 		self._cyr = np.array([i for i, c in enumerate(self._chars) if _script(c) == "cyr"])
-		self._runOpts = _run_options()
+		# Return memory to the system only after the last batch of lines: after each batch,
+		# onnxruntime would allocate it again for the next one, and a screen has ~25 batches.
+		self._runOpts = ort.RunOptions()
+		self._lastRunOpts = _run_options()
 
 	def read(self, bgr, boxes):
-		"""Для каждой рамки — (слова, уверенность); слов может не быть."""
+		"""For each box: (words, confidence); there may be no words."""
 		crops = [bgr[y0:y1, x0:x1] for (x0, y0, x1, y1) in boxes]
-		# Сортируем по пропорциям, чтобы в одной пачке были строки похожей длины (меньше пустого добивания).
+		# Sort by aspect ratio so a batch holds lines of similar length (less empty padding).
 		order = sorted(range(len(crops)), key=lambda i: crops[i].shape[1] / crops[i].shape[0])
 		results = [None] * len(crops)
 		for start in range(0, len(order), REC_BATCH):
@@ -150,24 +162,24 @@ class Reader:
 				img = cv2.resize(crops[i], (rw, REC_HEIGHT)).astype(np.float32)
 				batch[j, :, :, :rw] = ((img / 255.0 - 0.5) / 0.5).transpose(2, 0, 1)
 				widths.append(rw)
-			probs = self._rec.run(None, {self._recInput: batch}, self._runOpts)[0]
+			last = start + REC_BATCH >= len(order)
+			probs = self._rec.run(None, {self._recInput: batch}, self._lastRunOpts if last else self._runOpts)[0]
+			if self._keep is not None:
+				probs = probs[:, :, self._keep]
 			for j, i in enumerate(idx):
 				results[i] = self._ctc_words(probs[j], batchW, widths[j], boxes[i])
 		return results
 
 	def _ctc_words(self, prob, batchW, resizedW, box):
-		"""CTC-декодирование + координаты слов по позициям букв в строке."""
-		if self._banned is not None:
-			prob = prob.copy()
-			prob[:, self._banned] = 0
+		"""CTC decoding + word coordinates from the positions of characters in the line."""
 		ids = prob.argmax(axis=1)
 		conf = prob.max(axis=1)
 		steps = len(ids)
-		# Один шаг CTC покрывает batchW/steps пикселей картинки высотой 48;
-		# переводим в пиксели исходной строки.
+		# One CTC step covers batchW/steps pixels of the 48 px high image;
+		# convert to pixels of the original line.
 		x0, y0, x1, y1 = box
 		toBox = (batchW / steps) * ((x1 - x0) / resizedW)
-		chars = []  # (символ, шаг)
+		chars = []  # (character, step)
 		prev = 0
 		for t in range(steps):
 			c = int(ids[t])
@@ -199,9 +211,9 @@ class Reader:
 		return words, score
 
 	def _twin_spelling(self, word, prob):
-		"""Слово только из букв-двойников («Сору», «Bce») → оно же буквами другой азбуки, иначе None.
+		"""A word made only of twin letters ("Сору", "Bce") → the same word in the other script, else None.
 
-		Какую азбуку оставить, решает _pick_twin_script по соседним словам.
+		Which script to keep is decided by _pick_twin_script from the neighbouring words.
 		"""
 		if not len(self._latin) or not len(self._cyr):
 			return None
@@ -213,16 +225,16 @@ class Reader:
 		return "".join(self._chars[int(idx[prob[t, idx].argmax()])] if _script(c) else c for c, t in word)
 
 	def _fix_mixed_script(self, word, prob):
-		"""Убирает буквы-двойники чужой азбуки: «Itет» → «Item», «Windоws» → «Windows».
+		"""Removes twin letters of the wrong script: "Itет" → "Item", "Windоws" → "Windows".
 
-		Модель для русского знает и латиницу, и кириллицу, и в похожих буквах (е/e, а/a, т/m)
-		иногда ошибается азбукой. Если в слове есть буквы обеих азбук, выбираем главную по сумме
-		вероятностей на позициях букв и каждую чужую букву заменяем лучшей буквой главной азбуки.
+		The Russian model knows both Latin and Cyrillic, and with lookalike letters (е/e, а/a, т/m)
+		it sometimes picks the wrong script. If a word has letters of both scripts, pick the main one by the sum
+		of probabilities at the letter positions and replace each foreign letter with the best letter of the main script.
 		"""
 		if not len(self._latin) or not len(self._cyr):
 			return word
-		# Смотрим отдельно каждый кусок из букв подряд: в «Автотюнчик-1727.wav» кириллица и латиница
-		# законно стоят в разных кусках, а чинить надо только кусок, где азбуки перемешаны.
+		# Look at each run of consecutive letters separately: in "Автотюнчик-1727.wav" Cyrillic and Latin
+		# legitimately sit in different runs; only a run with mixed scripts needs fixing.
 		fixed = list(word)
 		i = 0
 		while i < len(fixed):
@@ -247,24 +259,24 @@ class Reader:
 
 
 def _fix_il(text):
-	"""Заглавная I и строчная l в рубленых шрифтах одинаковые; модель путает их: «AlI», «AII».
+	"""Capital I and lowercase l look the same in sans-serif fonts; the model mixes them up: "AlI", "AII".
 
-	Чиним только явные случаи:
-	- I после строчной буквы и не перед строчной — это l («AlI» → «All», «FiII» → «Fill»;
-	  «AddIn» не трогаем: там после I строчная);
-	- заглавная и дальше только I/l, всего от 3 букв — это строчные l («AII» → «All»);
-	- в слове заглавными (от 2 заглавных) строчная l — это I («TlGHT» → «TIGHT», «MlDl» → «MIDI»).
+	Only clear cases are fixed:
+	- I after a lowercase letter and not before a lowercase one is l ("AlI" → "All", "FiII" → "Fill";
+	    "AddIn" is left alone: a lowercase letter follows the I);
+	- a capital followed only by I/l, 3+ letters in total, means lowercase l ("AII" → "All");
+	- in an all-caps word (2+ capitals) a lowercase l is I ("TlGHT" → "TIGHT", "MlDl" → "MIDI").
 	"""
 	if len(text) >= 3 and text[0].isupper() and text[0] not in "Il" and set(text[1:]) <= {"I", "l"}:
 		return text[0] + "l" * (len(text) - 1)
 	letters = [c for c in text if c.isalpha()]
 	if "l" in letters and sum(c.isupper() for c in letters) >= 2 and all(c.isupper() or c == "l" for c in letters):
 		return text.replace("l", "I")
-	# Слово заглавными с одной случайной строчной («tIGHT») не трогаем: его починит _fix_case.
+	# An all-caps word with one stray lowercase letter ("tIGHT") is left alone: _fix_case will fix it.
 	if "I" not in text or sum(c.isupper() and c != "I" for c in letters) >= 2:
 		return text
 	chars = list(text)
-	# Слева направо: в «FiII» первая I станет l, и тогда вторая тоже окажется после строчной.
+	# Left to right: in "FiII" the first I becomes l, and then the second one also follows a lowercase letter.
 	for i in range(1, len(chars)):
 		nxt = chars[i + 1] if i + 1 < len(chars) else ""
 		if chars[i] == "I" and chars[i - 1].islower() and _script(chars[i - 1]) == "latin" and not nxt.islower():
@@ -273,10 +285,10 @@ def _fix_il(text):
 
 
 def _fix_case(text):
-	"""«DIREcTorY» → «DIRECTORY»: в мелких заглавных надписях модель путает регистр.
+	"""'DIREcTorY' → 'DIRECTORY': in small all-caps labels the model mixes up the case.
 
-	Чиним, только если заглавных больше половины И после строчной снова идёт заглавная —
-	так не трогаем нормальные «iPhone», «GitHub», «IDs», «macOS».
+	Fixed only if more than half of the letters are capitals AND a capital follows a lowercase letter again,
+	so normal "iPhone", "GitHub", "IDs", "macOS" are left alone.
 	"""
 	letters = [c for c in text if c.isalpha()]
 	if len(letters) < 4:
@@ -289,12 +301,12 @@ def _fix_case(text):
 	return text.upper()
 
 
-# Буквы, которые в кириллице и латинице выглядят одинаково (т и m модель тоже путает).
+# Letters that look the same in Cyrillic and Latin (the model also confuses т and m).
 _TWINS = set("АВЕКМНОРСТХУаеорсхукт" "ABEKMHOPCTXYaeopcxykm")
 
 
 def _word_script(text):
-	"""Азбука слова, если она точно видна: есть хоть одна буква не из двойников. Иначе None."""
+	"""The script of a word if it is clearly visible: at least one letter is not a twin. Else None."""
 	for c in text:
 		s = _script(c)
 		if s and c not in _TWINS:
@@ -303,8 +315,8 @@ def _word_script(text):
 
 
 def _pick_twin_script(items):
-	"""Слова только из букв-двойников пишем азбукой соседей по строке, а если соседей нет —
-	азбукой большинства слов на экране: «Сору Paste» → «Copy Paste», «Bce программы» → «Все программы».
+	"""Words made only of twin letters take the script of their line neighbours, or, with no neighbours,
+	the script of most words on the screen: "Сору Paste" → "Copy Paste", "Bce программы" → "Все программы".
 	"""
 	def majority(words):
 		counts = {"latin": 0, "cyr": 0}
@@ -321,30 +333,30 @@ def _pick_twin_script(items):
 		target = majority(ws) or screen
 		for w in ws:
 			alt = w.pop("alt", None)
-			# alt написан другой азбукой, чем text; берём его, если соседи пишут именно так.
+			# alt is written in the other script than text; take it if the neighbours use that script.
 			if alt and target and _word_script(w["text"]) is None and _script_of_letters(alt) == target:
 				w["text"] = alt
 
 
 def _script_of_letters(text):
-	"""Азбука первой буквы слова (для слов только из двойников все буквы одной азбуки)."""
+	"""The script of the first letter (in a word of twins only, all letters share one script)."""
 	return next((_script(c) for c in text if _script(c)), None)
 
 
 def latin_only(c):
-	"""Латиница, цифры, знаки и стрелки. Иероглифы и прочее запрещаем: иконки v6 уверенно читает как «平»."""
+	"""Latin, digits, punctuation and arrows. CJK and the rest are banned: v6 confidently reads icons as "平"."""
 	o = ord(c)
 	return o < 0x250 or 0x2000 <= o < 0x2200
 
 
 
 def bgra_to_bgr(buf, width, height):
-	"""Снимок экрана NVDA (байты RGBQUAD: синий, зелёный, красный, пусто) → картинка BGR для движка."""
+	"""NVDA screenshot (RGBQUAD bytes: blue, green, red, unused) → BGR image for the engine."""
 	return np.frombuffer(buf, dtype=np.uint8).reshape(height, width, 4)[:, :, :3].copy()
 
 
 def _script(c):
-	"""Азбука буквы: 'latin', 'cyr' или None (цифры, знаки и прочее)."""
+	"""The script of a character: 'latin', 'cyr' or None (digits, punctuation and others)."""
 	if not c.isalpha():
 		return None
 	o = ord(c)
@@ -356,7 +368,7 @@ def _script(c):
 
 
 def _db_boxes(pred, sx, sy, w, h):
-	"""Карта вероятностей детектора → прямоугольники строк (x0, y0, x1, y1) в пикселях исходной картинки."""
+	"""Detector probability map → line rectangles (x0, y0, x1, y1) in pixels of the original image."""
 	bitmap = (pred > DET_THRESH).astype(np.uint8)
 	contours, _ = cv2.findContours(bitmap, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 	boxes = []
@@ -364,19 +376,19 @@ def _db_boxes(pred, sx, sy, w, h):
 		bx, by, bw, bh = cv2.boundingRect(cnt)
 		if min(bw, bh) < DET_MIN_SIZE:
 			continue
-		# Уверенность — средняя вероятность внутри контура (как в PaddleOCR, режим fast).
+		# Confidence is the mean probability inside the contour (as in PaddleOCR, fast mode).
 		mask = np.zeros((bh, bw), dtype=np.uint8)
 		cv2.drawContours(mask, [cnt - (bx, by)], -1, 1, -1)
 		if cv2.mean(pred[by:by + bh, bx:bx + bw], mask)[0] < DET_BOX_THRESH:
 			continue
-		# Детектор находит «сжатую» середину строки; расширяем её обратно (unclip).
-		# Для прямоугольника расстояние = площадь * ratio / периметр.
+		# The detector finds the "shrunk" middle of a line; expand it back (unclip).
+		# For a rectangle, distance = area * ratio / perimeter.
 		(cx, cy), (rw, rh), angle = cv2.minAreaRect(cnt)
 		d = rw * rh * DET_UNCLIP_RATIO / (2 * (rw + rh))
 		pts = cv2.boxPoints(((cx, cy), (rw + 2 * d, rh + 2 * d), angle))
 		if min(rw, rh) + 2 * d < DET_MIN_SIZE + 2:
 			continue
-		# На экране текст горизонтальный, поэтому берём обычный прямоугольник вокруг повёрнутого.
+		# Text on screen is horizontal, so take an upright rectangle around the rotated one.
 		x0 = max(0, int(math.floor(pts[:, 0].min() * sx)))
 		y0 = max(0, int(math.floor(pts[:, 1].min() * sy)))
 		x1 = min(w, int(math.ceil(pts[:, 0].max() * sx)))
@@ -387,15 +399,15 @@ def _db_boxes(pred, sx, sy, w, h):
 
 
 def _group_lines(items):
-	"""Куски текста на одной высоте собирает в одну строку, сверху вниз и слева направо."""
+	"""Groups text pieces at the same height into one line, top to bottom and left to right."""
 	items.sort(key=lambda ws: ws[0]["y"] + ws[0]["height"] / 2)
-	lines = []  # [верх, низ, [куски]]
+	lines = []  # [top, bottom, [pieces]]
 	for ws in items:
 		top = ws[0]["y"]
 		bottom = top + ws[0]["height"]
 		if lines:
 			lt, lb, parts = lines[-1]
-			# Одна строка, если по высоте куски перекрываются больше чем наполовину меньшего.
+			# Same line if the pieces overlap vertically by more than half of the smaller one.
 			overlap = min(lb, bottom) - max(lt, top)
 			if overlap > 0.5 * min(lb - lt, bottom - top):
 				parts.append(ws)
@@ -408,8 +420,8 @@ def _group_lines(items):
 		parts.sort(key=lambda ws: ws[0]["x"])
 		cur = list(parts[0])
 		for ws in parts[1:]:
-			# Большой промежуток — это уже другая колонка (список слева, подсказка справа):
-			# читаем её отдельной строкой, чтобы не получалось «Human Voices Make a Category Selection».
+			# A large gap means another column (a list on the left, a hint on the right):
+			# read it as a separate line so we do not get "Human Voices Make a Category Selection".
 			gap = ws[0]["x"] - (cur[-1]["x"] + cur[-1]["width"])
 			if gap > LINE_GAP * min(cur[-1]["height"], ws[0]["height"]):
 				result.append(cur)

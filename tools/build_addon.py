@@ -1,7 +1,7 @@
-"""Собирает папку addon/ в файл .nvda-addon в корне проекта.
+"""Packs the addon/ folder into a .nvda-addon file in the project root.
 
-Запуск: .venv/Scripts/python tools/build_addon.py
-Перед первой сборкой: tools/fetch_models.py, затем tools/fetch_libs.py.
+Run: .venv/Scripts/python tools/build_addon.py
+Before the first build: tools/fetch_models.py, then tools/fetch_libs.py.
 """
 import ast
 import re
@@ -15,7 +15,7 @@ ADDON = ROOT / "addon"
 
 
 def parse_po(path):
-	"""Простой разбор .po: msgid/msgstr, строки-продолжения в кавычках. Пустые переводы пропускаем."""
+	"""Simple .po parser: msgid/msgstr, quoted continuation lines. Empty translations are skipped."""
 	entries, key, cur = {}, None, {}
 	for line in path.read_text(encoding="utf-8").splitlines() + [""]:
 		line = line.strip()
@@ -35,7 +35,7 @@ def parse_po(path):
 
 
 def compile_po(path):
-	"""Файл .mo (формат GNU gettext): заголовок, две таблицы (длина, смещение), затем сами строки."""
+	"""A .mo file (GNU gettext format): header, two tables (length, offset), then the strings."""
 	entries = sorted((k.encode("utf-8"), v.encode("utf-8")) for k, v in parse_po(path).items())
 	n = len(entries)
 	keysStart = 7 * 4 + 16 * n
@@ -61,7 +61,7 @@ def main():
 		if not (plugin / need).is_dir():
 			print(f"Ошибка: нет папки {plugin / need}. Запустите tools/fetch_libs.py")
 			return 1
-	# Напоминаем о строках без перевода, чтобы в русском интерфейсе не вылез английский.
+	# Remind about untranslated strings so English does not show up in the Russian interface.
 	used = set()
 	for f in plugin.glob("*.py"):
 		used |= {ast.literal_eval(s) for s in re.findall(r'_\(("(?:[^"\\]|\\.)*")\)', f.read_text(encoding="utf-8"))}
@@ -77,7 +77,7 @@ def main():
 				z.write(f, arc)
 				count += 1
 				if f.suffix == ".po":
-					# NVDA читает переводы из .mo; собираем его здесь, без отдельных утилит gettext.
+					# NVDA reads translations from .mo; build it here, without separate gettext tools.
 					z.writestr(arc[:-3] + ".mo", compile_po(f))
 					count += 1
 	print(f"Готово: {out.name}, файлов {count}, {out.stat().st_size / 2**20:.0f} МБ")

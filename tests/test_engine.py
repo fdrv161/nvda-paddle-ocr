@@ -1,6 +1,6 @@
-"""Проверки движка без NVDA: перевод снимка NVDA в картинку и координаты слов.
+"""Engine checks without NVDA: converting an NVDA capture to an image and word coordinates.
 
-Запуск: .venv/Scripts/python -m pytest tests/
+Run: .venv/Scripts/python -m pytest tests/
 """
 import sys
 from pathlib import Path
@@ -20,7 +20,7 @@ MODELS = PLUGIN / "models"
 @pytest.fixture(scope="module")
 def ocr():
 	if not (MODELS / "rec_eslav_v5").is_dir():
-		pytest.skip("Нет моделей в дополнении: запустите tools/fetch_libs.py")
+		pytest.skip("No models in the add-on: run tools/fetch_libs.py")
 	rec = MODELS / "rec_eslav_v5"
 	return engine.OcrEngine(MODELS / "det_v6_tiny" / "inference.onnx", rec / "inference.onnx", rec / "inference.yml")
 
@@ -53,24 +53,24 @@ def test_word_positions(ocr, size):
 	w, h = size
 	img = np.full((h, w, 3), 255, np.uint8)
 	k = h / 1080
-	# Слова в известных местах: (текст, левый край, базовая линия).
+	# Words at known places: (text, left edge, baseline).
 	placed = [("Hello", 100, 200), ("World", 700, 200), ("Settings", 1200, 600)]
 	for text, x, y in placed:
 		cv2.putText(img, text, (int(x * k), int(y * k)), cv2.FONT_HERSHEY_SIMPLEX, 1.2 * k, (0, 0, 0), max(1, int(2 * k)))
 	words = [wd for line in ocr.recognize(img) for wd in line]
 	for text, x, y in placed:
 		found = [wd for wd in words if wd["text"] == text]
-		assert found, f"Не найдено «{text}», есть: {[wd['text'] for wd in words]}"
+		assert found, f"Not found '{text}', got: {[wd['text'] for wd in words]}"
 		wd = found[0]
 		cx, cy = wd["x"] + wd["width"] / 2, wd["y"] + wd["height"] / 2
-		# Середина рамки слова должна попадать в само слово, иначе клик промахнётся.
+		# The middle of a word box must fall on the word itself, otherwise a click misses.
 		(tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1.2 * k, max(1, int(2 * k)))
 		assert x * k <= cx <= x * k + tw
 		assert y * k - th <= cy <= y * k + th * 0.3
 
 
 def test_latin_only():
-	# Язык «en»: латиница с диакритикой, знаки и стрелки можно; иероглифы, греческий и кириллицу нельзя.
+	# Language "en": Latin with diacritics, punctuation and arrows are allowed; CJK, Greek and Cyrillic are not.
 	assert all(engine.latin_only(c) for c in "Aé9+…→")
 	assert not any(engine.latin_only(c) for c in "平γП∏")
 
@@ -85,7 +85,7 @@ def test_fix_il(raw, fixed):
 
 
 def test_pick_twin_script():
-	# «Сору» среди английских слов → латиница; «Bce» среди русских → кириллица; спорное без соседей — по экрану.
+	# "Сору" among English words → Latin; "Bce" among Russian ones → Cyrillic; unclear with no neighbours → by screen.
 	w = lambda text, alt=None: {"text": text, **({"alt": alt} if alt else {})}
 	items = [[w("Сору", "Copy"), w("Paste")], [w("Bce", "Все"), w("программы")], [w("Туре", "Type")], [w("Edit")]]
 	engine._pick_twin_script(items)

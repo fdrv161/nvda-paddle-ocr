@@ -1,14 +1,14 @@
-"""Линейка точности: картинки с заранее известным текстом → процент ошибок движка.
+"""Accuracy gauge: images with known text → engine error rate.
 
-Рисует «экраны» шрифтами Windows (светлые и тёмные темы, разные размеры, русский и английский),
-распознаёт и сравнивает с правильным текстом построчно.
+Draws "screens" with Windows fonts (light and dark themes, various sizes, Russian and English),
+recognizes them and compares with the true text line by line.
 
-Запуск:
-  .venv/Scripts/python tools/accuracy.py                   # модели «Русский и английский»
-  .venv/Scripts/python tools/accuracy.py --rec rec_v6_small --latin  # язык «en»
+Run:
+  .venv/Scripts/python tools/accuracy.py                   # language "ru"
+  .venv/Scripts/python tools/accuracy.py --rec rec_v6_small --latin  # language "en"
   .venv/Scripts/python tools/accuracy.py --set REC_MIN_SCORE=0.3 --show 20
---set меняет настройку движка (имя из engine.py), --show печатает столько худших строк.
-Вывод построчный, без таблиц.
+--set changes an engine setting (a name from engine.py), --show prints that many worst lines.
+Output is line by line, without tables.
 """
 import argparse
 import random
@@ -26,7 +26,7 @@ import engine  # noqa: E402
 
 MODELS = ROOT / "addon" / "globalPlugins" / "paddleOcr" / "models"
 FONTS = ["segoeui.ttf", "tahoma.ttf", "arial.ttf", "verdana.ttf"]
-# (название, фон, текст): обычные сочетания из программ.
+# (name, background, text): common combinations from applications.
 THEMES = [
 	("светлая", (255, 255, 255), (0, 0, 0)),
 	("светлая серый текст", (240, 240, 240), (110, 110, 110)),
@@ -34,7 +34,7 @@ THEMES = [
 	("тёмная бледный текст", (45, 45, 48), (150, 150, 150)),
 	("цветная кнопка", (0, 103, 192), (255, 255, 255)),
 ]
-# Высота шрифта в пикселях: 12 — это 9 пунктов при 100% (обычный текст Windows).
+# Font height in pixels: 12 is 9 points at 100% (normal Windows text).
 SIZES = [11, 12, 13, 15, 18]
 
 EN = """File|Edit|View|Settings|Open Recent Files|Save As...|Check for updates|Preferences
@@ -70,10 +70,10 @@ MIXED = """Открыть в Visual Studio Code|Плагин Omnisphere 2.8|Ве
 
 
 def make_screens():
-	"""Список (название, картинка BGR, [(x0, y0, x1, y1, текст, язык)])."""
+	"""List of (name, BGR image, [(x0, y0, x1, y1, text, language)])."""
 	rng = random.Random(0)
 	screens = []
-	# Как в жизни: у экрана основной язык, а другой и смешанные строки встречаются изредка.
+	# As in real life: a screen has a main language, the other one and mixed lines appear now and then.
 	for theme, bg, fg, size, main in ((*t, s, m) for t in THEMES for s in SIZES for m in ("en", "ru")):
 		langs = [(main, 0.75), ("ru" if main == "en" else "en", 0.1), ("mix", 0.15)]
 		img = Image.new("RGB", (1400, 800), bg)
@@ -107,7 +107,7 @@ def levenshtein(a, b):
 
 
 def match(lines, truth):
-	"""Слова распознанного текста раскладывает по правильным строкам (по центру слова)."""
+	"""Distributes the recognized words among the true lines (by word centre)."""
 	got = [[] for _ in truth]
 	extra = 0
 	for line in lines:
@@ -135,7 +135,7 @@ def main():
 		name, value = s.split("=", 1)
 		old = getattr(engine, name)
 		setattr(engine, name, type(old)(value) if not isinstance(old, bool) else value.lower() in ("1", "true", "yes"))
-	# Модели, которых нет в дополнении (small, medium), берём из общей папки models/.
+	# Models not in the add-on (small, medium) are taken from the shared models/ folder.
 	det, rec = (MODELS / m if (MODELS / m).exists() else ROOT / "models" / m for m in (args.det, args.rec))
 	eng = engine.OcrEngine(det / "inference.onnx", rec / "inference.onnx", rec / "inference.yml",
 		allowed=engine.latin_only if args.latin else None)
@@ -150,7 +150,7 @@ def main():
 		totalExtra += extra
 		theme, size = name.rsplit(", ", 1)
 		for (_, _, _, _, text, lang), hyp in zip(truth, hyps):
-			# Многоточие одним знаком читается так же, это не ошибка.
+			# An ellipsis as one character reads the same, it is not an error.
 			e = levenshtein(hyp.replace("…", "..."), text)
 			for key in ("всё", f"язык {lang}", f"тема {theme}", f"размер {size}"):
 				errs[key] = errs.get(key, 0) + e

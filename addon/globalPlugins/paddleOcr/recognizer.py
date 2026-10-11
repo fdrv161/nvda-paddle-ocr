@@ -1,4 +1,4 @@
-"""Распознаватель для NVDA: принимает снимок от contentRecog и отдаёт LinesWordsResult."""
+"""Recognizer for NVDA: takes a capture from contentRecog and returns a LinesWordsResult."""
 import ctypes
 import os
 import sys
@@ -16,9 +16,9 @@ addonHandler.initTranslation()
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
 _MODELS = os.path.join(_DIR, "models")
-# Язык → (детектор, распознаватель, только латиница). Детектор общий.
-# «en» — лучшая модель для латиницы; иероглифы ей запрещаем, иначе иконки читаются как «平».
-# «ru» — eslav: читает и русский, и английский (английский чуть хуже, чем «en»).
+# Language → (detector, recognizer, Latin only). The detector is shared.
+# "en" is the best model for Latin script; CJK is banned for it, otherwise icons are read as "平".
+# "ru" is eslav: reads both Russian and English (English slightly worse than "en").
 LANGUAGES = {
 	"en": ("det_v6_tiny", "rec_v6_small", True),
 	"ru": ("det_v6_tiny", "rec_eslav_v5", False),
@@ -31,16 +31,16 @@ def languageName(lang):
 
 
 def getLanguage(auto=False):
-	"""Выбранный язык; если не выбран (или auto) — по языку NVDA, как у Windows OCR."""
+	"""The chosen language; if none (or auto), follow the NVDA language, like Windows OCR."""
 	lang = config.conf["paddleOcr"]["language"]
 	if lang in LANGUAGES and not auto:
 		return lang
 	return "ru" if languageHandler.getLanguage().startswith("ru") else "en"
 
-# Движок держим один на всё время работы NVDA: загрузка долгая, а после неё запросы быстрые.
+# One engine for the whole NVDA session: loading is slow, but requests after it are fast.
 _engine = None
 _engineLang = None
-# Один запрос за раз, даже если два потока успели стартовать.
+# One request at a time, even if two threads managed to start.
 _runLock = threading.Lock()
 
 
@@ -48,12 +48,12 @@ def _getEngine(lang):
 	global _engine, _engineLang
 	if _engine is None or _engineLang != lang:
 		lib = os.path.join(_DIR, "lib")
-		# В конец, а не в начало: свои модули NVDA не должны подменяться нашими.
+		# Append rather than prepend: NVDA's own modules must not be shadowed by ours.
 		if lib not in sys.path:
 			sys.path.append(lib)
 		from . import engine
 		det, rec, latinOnly = LANGUAGES[lang]
-		_engine = None  # Сначала отпускаем старый движок, чтобы в памяти не было двух сразу.
+		_engine = None  # Release the old engine first so two are never in memory at once.
 		_engine = engine.OcrEngine(
 			os.path.join(_MODELS, det, "inference.onnx"),
 			os.path.join(_MODELS, rec, "inference.onnx"),
@@ -65,7 +65,7 @@ def _getEngine(lang):
 
 
 class PaddleOcr(ContentRecognizer):
-	# recogUi спрашивает эти свойства при каждом распознавании, так что настройки действуют сразу.
+	# recogUi reads these properties on every recognition, so settings take effect immediately.
 	@property
 	def allowAutoRefresh(self):
 		return config.conf["paddleOcr"]["autoRefresh"]
@@ -75,16 +75,16 @@ class PaddleOcr(ContentRecognizer):
 		return config.conf["paddleOcr"]["autoSayAllOnResult"]
 
 	def __init__(self):
-		# Метка текущего запроса: если запрос отменили, его результат молча выбрасываем.
+		# Tag of the current request: if the request was cancelled, its result is silently dropped.
 		self._current = None
 
 	def getResizeFactor(self, width, height):
-		# Масштаб выбирает сам движок, а координаты он возвращает в пикселях снимка.
+		# The engine picks the scale itself and returns coordinates in capture pixels.
 		return 1
 
 	def recognize(self, pixels, imageInfo, onResult):
 		w, h = imageInfo.recogWidth, imageInfo.recogHeight
-		# Копируем снимок сразу: буфер NVDA после возврата из этого метода может исчезнуть.
+		# Copy the capture right away: NVDA's buffer may be gone after this method returns.
 		buf = ctypes.string_at(ctypes.addressof(pixels), w * h * 4)
 		lang = getLanguage()
 		if _engine is None or _engineLang != lang:
@@ -111,7 +111,7 @@ class PaddleOcr(ContentRecognizer):
 				result = e
 		if self._current is token:
 			self._current = None
-			# recogUi сам переносит результат в главный поток NVDA.
+			# recogUi itself moves the result to the NVDA main thread.
 			onResult(result)
 
 	def cancel(self):
