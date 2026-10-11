@@ -150,7 +150,7 @@ def main():
 		det / "inference.onnx",
 		rec / "inference.onnx",
 		rec / "inference.yml",
-		allowed=engine.latin_only if args.latin else None,
+		allowed=engine.latinOnly if args.latin else None,
 	)
 	screens = make_screens()
 	errs, lens, times, rows = {}, {}, [], []

@@ -66,7 +66,7 @@ def _getEngine(lang):
 			os.path.join(_MODELS, det, "inference.onnx"),
 			os.path.join(_MODELS, rec, "inference.onnx"),
 			os.path.join(_MODELS, rec, "inference.yml"),
-			allowed=engine.latin_only if latinOnly else None,
+			allowed=engine.latinOnly if latinOnly else None,
 		)
 		_engineLang = lang
 	return _engine
@@ -115,7 +115,7 @@ class PaddleOcr(ContentRecognizer):
 				eng = _getEngine(lang)
 				from . import engine
 
-				bgr = engine.bgra_to_bgr(buf, imageInfo.recogWidth, imageInfo.recogHeight)
+				bgr = engine.bgraToBgr(buf, imageInfo.recogWidth, imageInfo.recogHeight)
 				result = LinesWordsResult(eng.recognize(bgr), imageInfo)
 			except Exception as e:
 				log.exception("Paddle OCR: recognition failed")

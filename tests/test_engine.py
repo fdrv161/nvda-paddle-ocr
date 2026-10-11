@@ -28,10 +28,10 @@ def ocr():
 	)
 
 
-def test_bgra_to_bgr():
+def test_bgraToBgr():
 	bgr = np.random.default_rng(1).integers(0, 256, (7, 5, 3), dtype=np.uint8)
 	bgra = np.dstack([bgr, np.full((7, 5), 255, np.uint8)])
-	out = engine.bgra_to_bgr(bgra.tobytes(), 5, 7)
+	out = engine.bgraToBgr(bgra.tobytes(), 5, 7)
 	assert out.shape == (7, 5, 3)
 	assert out.flags["C_CONTIGUOUS"]
 	assert np.array_equal(out, bgr)
@@ -83,10 +83,10 @@ def test_word_positions(ocr, size):
 		assert y * k - th <= cy <= y * k + th * 0.3
 
 
-def test_latin_only():
+def test_latinOnly():
 	# Language "en": Latin with diacritics, punctuation and arrows are allowed; CJK, Greek and Cyrillic are not.
-	assert all(engine.latin_only(c) for c in "Aé9+…→")
-	assert not any(engine.latin_only(c) for c in "平γП∏")
+	assert all(engine.latinOnly(c) for c in "Aé9+…→")
+	assert not any(engine.latinOnly(c) for c in "平γП∏")
 
 
 @pytest.mark.parametrize(

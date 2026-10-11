@@ -85,6 +85,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	@script(
 		# Translators: Description of the command in the Input Gestures dialog.
 		description=_("Recognizes the content of the current navigator object with Paddle OCR"),
+		speakOnDemand=True,
 	)
 	def script_recognizeNavigatorObject(self, gesture):
 		# Do nothing on the secure screen (sign-in, UAC).
@@ -96,7 +97,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 		if self._recognizer is None:
 			self._recognizer = PaddleOcr()
-		# From here on everything is as with Windows OCR: capture (also with Screen Curtain), result window, clicking words.
+		# From here on everything is as with Windows OCR:
+		# capture (also with Screen Curtain), result window, clicking words.
 		recogUi.recognizeNavigatorObject(self._recognizer)
 
 	@script(

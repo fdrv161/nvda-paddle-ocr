@@ -81,7 +81,8 @@ def _session(path, threads):
 
 
 def _run_options():
-	# Return working memory to the system after each run, otherwise the peak of a large screen stays until exit.
+	# Return working memory to the system after each run,
+	# otherwise the peak of a large screen stays until exit.
 	opts = ort.RunOptions()
 	opts.add_run_config_entry("memory.enable_memory_arena_shrinkage", "cpu:0")
 	return opts
@@ -196,7 +197,7 @@ class Reader:
 			prev = c
 		if not chars:
 			return [], 0.0
-		score = float(np.mean([conf[t] for _, t in chars]))
+		score = float(np.mean([conf[t] for _char, t in chars]))
 		words = []
 		cur = []
 		for ch, t in chars + [(" ", steps)]:
@@ -210,7 +211,7 @@ class Reader:
 						"y": y0,
 						"width": max(1, wx1 - wx0),
 						"height": y1 - y0,
-						"text": _fix_case(_fix_il("".join(c for c, _ in cur))),
+						"text": _fix_case(_fix_il("".join(c for c, _t in cur))),
 					}
 					alt = self._twin_spelling(cur, prob)
 					if alt:
@@ -228,7 +229,7 @@ class Reader:
 		"""
 		if not len(self._latin) or not len(self._cyr):
 			return None
-		letters = [c for c, _ in word if _script(c)]
+		letters = [c for c, _t in word if _script(c)]
 		scripts = {_script(c) for c in letters}
 		if len(scripts) != 1 or not all(c in _TWINS for c in letters):
 			return None
@@ -239,8 +240,9 @@ class Reader:
 		"""Removes twin letters of the wrong script: "Itет" → "Item", "Windоws" → "Windows".
 
 		The Russian model knows both Latin and Cyrillic, and with lookalike letters (е/e, а/a, т/m)
-		it sometimes picks the wrong script. If a word has letters of both scripts, pick the main one by the sum
-		of probabilities at the letter positions and replace each foreign letter with the best letter of the main script.
+		it sometimes picks the wrong script. If a word has letters of both scripts, pick the main one
+		by the sum of probabilities at the letter positions and replace each foreign letter
+		with the best letter of the main script.
 		"""
 		if not len(self._latin) or not len(self._cyr):
 			return word
@@ -256,8 +258,8 @@ class Reader:
 			while j < len(fixed) and _script(fixed[j][0]) is not None:
 				j += 1
 			run = fixed[i:j]
-			if {"latin", "cyr"} <= {_script(c) for c, _ in run}:
-				steps = [t for _, t in run]
+			if {"latin", "cyr"} <= {_script(c) for c, _t in run}:
+				steps = [t for _char, t in run]
 				latinMass = prob[steps][:, self._latin].sum()
 				cyrMass = prob[steps][:, self._cyr].sum()
 				main, mainIdx = ("latin", self._latin) if latinMass >= cyrMass else ("cyr", self._cyr)
@@ -274,7 +276,7 @@ def _fix_il(text):
 
 	Only clear cases are fixed:
 	- I after a lowercase letter and not before a lowercase one is l ("AlI" → "All", "FiII" → "Fill";
-	    "AddIn" is left alone: a lowercase letter follows the I);
+		"AddIn" is left alone: a lowercase letter follows the I);
 	- a capital followed only by I/l, 3+ letters in total, means lowercase l ("AII" → "All");
 	- in an all-caps word (2+ capitals) a lowercase l is I ("TlGHT" → "TIGHT", "MlDl" → "MIDI").
 	"""
@@ -364,13 +366,16 @@ def _script_of_letters(text):
 	return next((_script(c) for c in text if _script(c)), None)
 
 
-def latin_only(c):
-	"""Latin, digits, punctuation and arrows. CJK and the rest are banned: v6 confidently reads icons as "平"."""
+def latinOnly(c):
+	"""Latin, digits, punctuation and arrows.
+
+	CJK and the rest are banned: v6 confidently reads icons as "平".
+	"""
 	o = ord(c)
 	return o < 0x250 or 0x2000 <= o < 0x2200
 
 
-def bgra_to_bgr(buf, width, height):
+def bgraToBgr(buf, width, height):
 	"""NVDA screenshot (RGBQUAD bytes: blue, green, red, unused) → BGR image for the engine."""
 	return np.frombuffer(buf, dtype=np.uint8).reshape(height, width, 4)[:, :, :3].copy()
 
