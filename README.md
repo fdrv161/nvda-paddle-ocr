@@ -1,50 +1,48 @@
-# Paddle OCR для NVDA
+# Paddle OCR for NVDA
 
-Дополнение для NVDA, которое распознаёт текст на экране моделями [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR). Работает так же, как встроенный Windows OCR (NVDA+R): то же окно результата, можно ходить по тексту и щёлкать по словам. Но читает обычно точнее, особенно мелкий текст, тёмные темы и интерфейсы программ вроде синтезаторов и DAW.
+Recognizes text on the screen with [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) models. It works like the built-in Windows OCR (NVDA+R): the same result window, the same navigation and clicking on words, but it is usually more accurate, especially with small text, dark themes and custom interfaces of audio plugins and other apps.
 
-Всё работает без интернета: модели и библиотеки лежат внутри дополнения.
+Everything works offline: the models and libraries are inside the add-on.
 
-[English below](#english)
+[Справка на русском](addon/doc/ru/readme.html)
 
-## Требования
+## Requirements
 
-- NVDA 2026.3 или новее (64 бит).
-- Windows 10 или 11.
+- NVDA 2026.3 or later (64-bit).
+- Windows 10 or 11.
 
-## Установка
+## Installation
 
-1. Откройте страницу [Releases](../../releases) и скачайте последний файл `paddleOcr-x.y.z.nvda-addon`.
-2. Откройте его (Enter в проводнике) и согласитесь на установку, потом перезапустите NVDA.
-3. Назначьте жесты: меню NVDA, Параметры, Жесты ввода, категория «Paddle OCR». Жестов по умолчанию нет, чтобы не мешать вашим.
+1. Download the latest `paddleOcr-x.y.z.nvda-addon` from [Releases](../../releases).
+2. Open it, confirm the installation and restart NVDA.
+3. Assign gestures: NVDA menu, Preferences, Input gestures, category "Paddle OCR". There are no default gestures.
 
-## Команды
+## Commands
 
-- **Распознаёт содержимое текущего объекта навигатора.** Открывает окно с результатом. Стрелки — ходить по тексту, Enter — щёлкнуть по слову, Escape — закрыть.
-- **Переключает язык распознавания**: английский или русский.
-- **Открывает настройки Paddle OCR.**
+- **Recognize the current navigator object.** Opens the result window. Arrow keys move through the text, Enter clicks a word, Escape closes the window.
+- **Cycle the recognition language**: English or Russian.
+- **Open Paddle OCR settings.**
 
-При первом распознавании прозвучит «Загрузка моделей OCR»: модели загружаются один раз, дальше распознавание занимает около 0,4 секунды на экран.
+The first recognition says "Loading OCR models". After that a full screen takes about 0.4 seconds.
 
-## Языки
+## Languages
 
-- **Английский** — самая высокая точность для английского и других языков на латинице. Русский в этом режиме не читается.
-- **Русский** — читает и русский, и английский, но английский немного хуже.
+- **English**: the best accuracy for English and other Latin-script languages. Does not read Cyrillic.
+- **Russian**: reads Russian and English, English slightly worse than in English mode.
 
-По умолчанию язык берётся из языка NVDA. Если программа на английском, включите английский.
+By default the language follows the NVDA language.
 
-## Настройки
+## Settings
 
-Меню NVDA, Параметры, Настройки, категория «Paddle OCR»: язык распознавания, периодическое обновление результата, чтение всего результата сразу после распознавания.
+NVDA menu, Preferences, Settings, category "Paddle OCR":
 
-## Шторка экрана
+- Recognition language.
+- Periodically refresh recognized content (off by default).
+- Automatically say all when recognition finishes (on by default).
 
-Как и Windows OCR, дополнение распознаёт при включённой шторке, если это поддерживает Windows. Если нет, NVDA попросит временно отключить шторку.
+## Building
 
-## Для разработчиков
-
-Код дополнения лежит в `addon/`, движок — `addon/globalPlugins/paddleOcr/engine.py` (не зависит от NVDA, его можно проверять обычным Python). Библиотеки и модели в репозиторий не входят, их скачивают скрипты.
-
-Сборка у себя:
+Libraries and models are not stored in the repository; scripts download them.
 
 ```bash
 python -m venv .venv
@@ -66,44 +64,8 @@ python -m venv .venv
 .venv/Scripts/python tools/build_addon.py
 ```
 
-Проверки:
+To release, set `version` in `addon/manifest.ini` and push a tag with the same version, for example `v1.1.0`. GitHub Actions runs the tests, builds the add-on and publishes the release.
 
-- `tools/accuracy.py` — процент ошибок на картинках с известным текстом;
-- `tools/bench.py` — скорость и память на скриншотах;
-- `pytest tests` — тесты движка.
+## License
 
-### Выпуск новой версии
-
-1. Поменять `version` в `addon/manifest.ini`, например на `1.1.0`.
-2. Закоммитить и отправить тег с той же версией:
-
-```bash
-git tag v1.1.0
-```
-
-```bash
-git push origin v1.1.0
-```
-
-GitHub Actions сам скачает модели и библиотеки, прогонит тесты, соберёт `.nvda-addon` и создаст релиз с этим файлом. Если версия в теге и в `manifest.ini` разная, сборка остановится.
-
-## Лицензии
-
-- Код дополнения — GNU GPL версии 2 или новее, текст в [LICENSE](LICENSE).
-- Модели PaddleOCR (PP-OCRv6, PP-OCRv5 eslav) — Apache 2.0.
-- onnxruntime — MIT, NumPy — BSD, OpenCV — Apache 2.0.
-
-Полные тексты лежат в дополнении: папка `licenses` и рядом с каждой библиотекой в `lib`.
-
----
-
-## English
-
-An NVDA add-on that recognizes text on the screen with [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) models. It works just like the built-in Windows OCR (NVDA+R): the same result window, text navigation and clicking on words, but it is usually more accurate. Everything works offline.
-
-- Requires NVDA 2026.3 or later (64-bit).
-- Download the latest `.nvda-addon` from [Releases](../../releases), install it, then assign gestures in Input gestures, category "Paddle OCR" (there are no default gestures).
-- Commands: recognize the current navigator object, cycle the recognition language (English or Russian), open Paddle OCR settings.
-- English mode gives the best accuracy for Latin-script text but does not read Russian. Russian mode reads both Russian and English.
-- License: add-on code GNU GPL version 2 or later; bundled models and libraries keep their own licenses (Apache 2.0, MIT, BSD).
-- Building: see the developer section above. Pushing a tag `vX.Y.Z` makes GitHub Actions build the add-on and publish a release.
+The add-on code is licensed under the [GNU GPL version 2 or later](LICENSE). Bundled components keep their own licenses: PaddleOCR models and OpenCV (Apache 2.0), onnxruntime (MIT), NumPy (BSD). Their license texts are included in the add-on.
