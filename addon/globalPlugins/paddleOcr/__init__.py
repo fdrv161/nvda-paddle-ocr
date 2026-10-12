@@ -65,6 +65,14 @@ class PaddleOcrPanel(SettingsPanel):
 		conf["autoSayAllOnResult"] = self.autoSayAllCheckBox.GetValue()
 
 
+def disableInSecureMode(pluginClass):
+	"""On sign-in, lock and UAC screens load an empty plugin: no commands, no settings."""
+	if globalVars.appArgs.secure:
+		return globalPluginHandler.GlobalPlugin
+	return pluginClass
+
+
+@disableInSecureMode
 class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	# Translators: Category of Paddle OCR commands in the Input Gestures dialog.
 	scriptCategory = _("Paddle OCR")
@@ -73,9 +81,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		super().__init__()
 		# Create the recognizer on the first command so NVDA startup is not slowed down.
 		self._recognizer = None
-		# Settings cannot be changed on the secure screen.
-		if not globalVars.appArgs.secure:
-			NVDASettingsDialog.categoryClasses.append(PaddleOcrPanel)
+		NVDASettingsDialog.categoryClasses.append(PaddleOcrPanel)
 
 	def terminate(self):
 		if PaddleOcrPanel in NVDASettingsDialog.categoryClasses:
@@ -88,9 +94,6 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		speakOnDemand=True,
 	)
 	def script_recognizeNavigatorObject(self, gesture):
-		# Do nothing on the secure screen (sign-in, UAC).
-		if globalVars.appArgs.secure:
-			return
 		from contentRecog import recogUi
 
 		from .recognizer import PaddleOcr
