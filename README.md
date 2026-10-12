@@ -1,8 +1,8 @@
 # Paddle OCR for NVDA
 
-## About
+## About the add-on
 
-Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R) for NVDA 2026.3 and later. The add-on uses compact PaddleOCR recognition models from Baidu that run locally through onnxruntime right inside NVDA — no internet and no third-party applications. The engine is usually more accurate, especially with small fonts, text on dark backgrounds and custom interfaces such as audio plugins. The result window and Screen Curtain support work the same as with Windows OCR.
+Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R) for NVDA 2026.3 and newer. The add-on uses compact PaddleOCR recognition models from Baidu that run locally. This engine usually reads more accurately, especially small fonts, text on dark backgrounds, and non-standard interfaces such as VST plugins. The result window and screen curtain behavior are the same as with Windows OCR.
 
 ## Installation
 
@@ -10,48 +10,50 @@ Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R) for NVDA 2026.
 2. Open it, confirm the installation and restart NVDA.
 3. Assign gestures: NVDA menu, Preferences, Input gestures, category "Paddle OCR". There are no default gestures.
 
-## Commands
+## Commands and controls
 
-There are no default gestures, so nothing conflicts with other add-ons. Assign them in the NVDA menu: Preferences, Input gestures, category "Paddle OCR".
+There are no default hotkeys to avoid conflicts with other add-ons. You can assign them in the NVDA menu: Preferences, Input Gestures, "Paddle OCR" category.
 
-* **Recognize the navigator object.** Opens the result window: arrow keys move through the text, Enter clicks a word, Escape closes the window.
-* **Cycle the recognition language:** Latin or Cyrillic.
-* **Open Paddle OCR settings.**
+* **Recognizes the content of the current navigator object with Paddle OCR.** Opens the result window: arrows move through the text, Enter clicks on the word, Escape closes the window.
+* **Cycles through the available languages for Paddle OCR.** Latin or Cyrillic.
+* **Shows the Paddle OCR settings.**
 
-The first recognition in a session says "Loading OCR models". On the author's laptop (Ryzen 7 7840HS) a full screen is recognized in about 0.4 seconds, and small windows in a fraction of a second. On slower computers it may take several times longer.
+On the first recognition after starting NVDA, "Loading OCR models" will be announced. After that, the models remain in memory.
+
+On my laptop (Ryzen 7 7840HS, 32 GB RAM, Windows 11 25H2), the entire screen is recognized in about 0.4 seconds, and small windows in fractions of a second. On weak hardware it may be slower.
 
 ## Languages and alphabets
 
-The add-on has two modes, by alphabet:
+The add-on works in two modes, by alphabet:
 
-* **Latin:** English, German, French, Spanish, Polish and others. The best accuracy, but Cyrillic is not recognized.
-* **Cyrillic:** Russian, Ukrainian, Belarusian, Bulgarian, Serbian, Kazakh, Tatar, Bashkir and others. English text is recognized too, but slightly less accurately than in the Latin mode.
+* **Latin:** English, German, French, Spanish, Polish, and others. Maximum accuracy, but Cyrillic is not recognized.
+* **Cyrillic:** Russian, Ukrainian, Belarusian, Bulgarian, Serbian, Kazakh, Tatar, Bashkir, and others. English text is also recognized, but accuracy is slightly lower than in "Latin" mode.
 
-By default the mode follows the NVDA language. For an application in English, Latin works best; for one in Russian, Cyrillic.
+By default the mode follows the NVDA language: Latin for English, Cyrillic for Russian.
 
-When NVDA is in Russian, Ukrainian, Belarusian or Bulgarian, letters of the other Cyrillic alphabets are turned off, so random artifacts like "һ" instead of "н" do not get into the text. Letters of, for example, Kazakh or Serbian are read when NVDA itself runs in that language.
+If NVDA is in Russian, Ukrainian, Belarusian, or Bulgarian, letters from other Cyrillic alphabets are disabled so that random artifacts like "һ" instead of "н" do not get into the text.
 
 ## Settings
 
-NVDA menu: Preferences, Settings, category "Paddle OCR".
+NVDA menu: Preferences, Settings, "Paddle OCR" category.
 
-* **Recognition language:** same as NVDA, Latin or Cyrillic.
-* **Periodically refresh recognized content:** the result window re-reads itself while it is open. This keeps the processor busy the whole time, so it is off by default.
-* **Automatically say all when recognition finishes:** the text is read in full right away. If you prefer to read it yourself, turn this off. On by default.
+* **Recognition language:** Same as NVDA, Latin or Cyrillic.
+* **Periodically refresh recognized content:** the result window re-reads itself while open. It loads the processor, so it is disabled by default.
+* **Automatically say all when recognition finishes:** text is spoken immediately after recognition. Enabled by default.
 
 ## Privacy
 
-Recognition runs entirely on your computer. The add-on does not connect to the internet, sends nothing anywhere and saves neither screenshots nor recognized text to disk; only its settings are stored, in the NVDA configuration. The NVDA log gets only error messages and, at the debug log level, the image size and timings, never the recognized text.
+The add-on does not connect to the internet, does not send anything anywhere, and does not save either screenshots or recognized text to disk. Only its settings are stored in the NVDA config. Only error messages go into the NVDA log, and at the "debug" log level, also the image size and the time it took for OCR to occur.
 
-## Limitations
+## Limitations and nuances
 
-* Icons and interface borders are sometimes recognized as random characters like "x", "o", "+".
-* Short single words made of letters that look the same in both alphabets are sometimes read with the wrong letters.
-* The system library `MSVCP140_1.dll` is required. If recognition reports an error and the NVDA log mentions this library, install the [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170) from Microsoft.
+* Icons and interface frames are sometimes recognized as random characters like "x", "o", "+".
+* Short single words made of letters that are the same in both alphabets are sometimes read with the wrong letters.
+* The system library `MSVCP140_1.dll` is required. If an error sounds during recognition and this library is mentioned in the NVDA log, install the [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170) package from the Microsoft website.
 
 ## Version history
 
-What is new in each version is on the [releases page](https://github.com/fdrv161/nvda-paddle-ocr/releases).
+What's new in each version is on the [releases page](https://github.com/fdrv161/nvda-paddle-ocr/releases).
 
 ## Building
 
@@ -90,8 +92,10 @@ The add-on's `lib/` and `models/` folders are not stored in git. `tools/fetch_li
 
 ## Links and licenses
 
-Source code, bug tracker and discussions are in the [GitHub repository](https://github.com/fdrv161/nvda-paddle-ocr).
+Source code: [GitHub](https://github.com/fdrv161/nvda-paddle-ocr).
 
 Projects used: [NVDA](https://www.nvaccess.org/), [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), [onnxruntime](https://github.com/microsoft/onnxruntime), [OpenCV](https://opencv.org/), [NumPy](https://numpy.org/).
 
-The add-on code is licensed under the [GPL v2 or later](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html), PaddleOCR models and OpenCV under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0), onnxruntime under [MIT](https://opensource.org/licenses/MIT), NumPy under [BSD](https://opensource.org/licenses/BSD-3-Clause).
+The add-on code is distributed under [GPL v2 or later](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html), PaddleOCR models and OpenCV under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0), onnxruntime under [MIT](https://opensource.org/licenses/MIT), NumPy under [BSD](https://opensource.org/licenses/BSD-3-Clause).
+
+Library versions included in the add-on: onnxruntime 1.30.0, NumPy 2.5.3, opencv-python-headless 5.0.0.93, taken unchanged from PyPI. Where each file was taken from is described in the Third-party components section above.
