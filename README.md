@@ -39,6 +39,10 @@ NVDA menu: Preferences, Settings, category "Paddle OCR".
 * **Periodically refresh recognized content:** the result window re-reads itself while it is open. This keeps the processor busy the whole time, so it is off by default.
 * **Automatically say all when recognition finishes:** the text is read in full right away. If you prefer to read it yourself, turn this off. On by default.
 
+## Privacy
+
+Recognition runs entirely on your computer. The add-on does not connect to the internet, sends nothing anywhere and saves neither screenshots nor recognized text to disk; only its settings are stored, in the NVDA configuration. The NVDA log gets only error messages and, at the debug log level, the image size and timings, never the recognized text.
+
 ## Limitations
 
 * Icons and interface borders are sometimes recognized as random characters like "x", "o", "+".
@@ -58,7 +62,7 @@ python -m venv .venv
 ```
 
 ```bash
-.venv/Scripts/python -m pip install numpy opencv-python-headless onnxruntime pytest pillow markdown
+.venv/Scripts/python -m pip install numpy==2.5.3 opencv-python-headless==5.0.0.93 onnxruntime==1.30.0 pytest pillow markdown
 ```
 
 ```bash
@@ -74,6 +78,15 @@ python -m venv .venv
 ```
 
 To release, set `version` in `addon/manifest.ini` and push a tag with the same version, for example `v1.1.0`. GitHub Actions runs the tests, builds the add-on and publishes the release.
+
+## Third-party components
+
+The add-on's `lib/` and `models/` folders are not stored in git. `tools/fetch_libs.py` and `tools/fetch_models.py` download them from the official sources below, with pinned versions, so running these two scripts rebuilds the same folders. Files are copied unchanged; only parts not needed at runtime are left out: tests, C headers, onnxruntime tools, OpenCV data files and the OpenCV ffmpeg video library. Licenses of the libraries go into the package with them.
+
+* **onnxruntime 1.30.0** (MIT), PyPI wheel `onnxruntime-1.30.0-cp313-cp313-win_amd64.whl`. Binaries: `onnxruntime.dll`, `onnxruntime_providers_shared.dll`, `onnxruntime_pybind11_state.pyd`. Licenses: `lib/onnxruntime/LICENSE`, `ThirdPartyNotices.txt`.
+* **NumPy 2.5.3** (BSD-3-Clause), PyPI wheel `numpy-2.5.3-cp313-cp313-win_amd64.whl`. Binaries: the `.pyd` modules of NumPy and, in `numpy.libs`, OpenBLAS (`libscipy_openblas64_*.dll`) and the Microsoft C++ runtime (`msvcp140-*.dll`) that NumPy ships. Licenses: `lib/licenses/numpy/`.
+* **opencv-python-headless 5.0.0.93** (Apache 2.0), PyPI wheel `opencv_python_headless-5.0.0.93-cp37-abi3-win_amd64.whl`. Binary: `cv2.pyd`. Licenses: `lib/cv2/LICENSE.txt`, `LICENSE-3RD-PARTY.txt`.
+* **PaddleOCR models** (Apache 2.0) `det_v6_tiny`, `rec_v6_small`, `rec_cyrillic_v5`: ONNX files from the [PaddlePaddle organization on Hugging Face](https://huggingface.co/PaddlePaddle). Repository names and SHA-256 hashes are in `models/manifest.json`; the license is in `addon/licenses/PaddleOCR-models.txt`.
 
 ## Links and licenses
 

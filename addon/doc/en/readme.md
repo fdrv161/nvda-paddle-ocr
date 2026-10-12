@@ -33,6 +33,10 @@ NVDA menu: Preferences, Settings, category "Paddle OCR".
 * **Periodically refresh recognized content:** the result window re-reads itself while it is open. This keeps the processor busy the whole time, so it is off by default.
 * **Automatically say all when recognition finishes:** the text is read in full right away. If you prefer to read it yourself, turn this off. On by default.
 
+## Privacy
+
+Recognition runs entirely on your computer. The add-on does not connect to the internet, sends nothing anywhere and saves neither screenshots nor recognized text to disk; only its settings are stored, in the NVDA configuration. The NVDA log gets only error messages and, at the debug log level, the image size and timings, never the recognized text.
+
 ## Limitations
 
 * Icons and interface borders are sometimes recognized as random characters like "x", "o", "+".
@@ -50,3 +54,5 @@ Source code, bug tracker and discussions are in the [GitHub repository](https://
 Projects used: [NVDA](https://www.nvaccess.org/), [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), [onnxruntime](https://github.com/microsoft/onnxruntime), [OpenCV](https://opencv.org/), [NumPy](https://numpy.org/).
 
 The add-on code is licensed under the [GPL v2 or later](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html), PaddleOCR models and OpenCV under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0), onnxruntime under [MIT](https://opensource.org/licenses/MIT), NumPy under [BSD](https://opensource.org/licenses/BSD-3-Clause).
+
+Bundled library versions: onnxruntime 1.30.0, NumPy 2.5.3, opencv-python-headless 5.0.0.93, taken unchanged from PyPI. Where each file comes from is described in the README of the repository.
