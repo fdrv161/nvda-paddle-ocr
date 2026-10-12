@@ -1,0 +1,2 @@
+# Always LF in the working folder too: the add-on package is built from it, and NVDA code uses LF.
+* text=auto eol=lf
