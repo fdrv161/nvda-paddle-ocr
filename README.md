@@ -1,12 +1,8 @@
 # Paddle OCR for NVDA
 
-Recognizes text on the screen with [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) models. It works like the built-in Windows OCR (NVDA+R): the same result window, the same navigation and clicking on words, but it is usually more accurate, especially with small text, dark themes and custom interfaces of audio plugins and other apps.
+## About
 
-Everything works offline: the models and libraries are inside the add-on.
-
-## Requirements
-
-- NVDA 2026.3 or later (64-bit).
+Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R) for [NVDA](https://www.nvaccess.org/) 2026.3 and later. The add-on uses compact recognition models from Baidu ([PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0)) that run locally through [onnxruntime](https://github.com/microsoft/onnxruntime) right inside NVDA — no internet and no third-party applications. The engine reads small fonts and text on dark backgrounds more accurately. The result window and the behaviour with Screen Curtain on are the same as you are used to in NVDA.
 
 ## Installation
 
@@ -16,28 +12,40 @@ Everything works offline: the models and libraries are inside the add-on.
 
 ## Commands
 
-- **Recognize the current navigator object.** Opens the result window. Arrow keys move through the text, Enter clicks a word, Escape closes the window.
-- **Cycle the recognition language**: Latin or Cyrillic.
-- **Open Paddle OCR settings.**
+There are no default gestures, so nothing conflicts with other add-ons. Assign them in the NVDA menu: Preferences → Input gestures → category "Paddle OCR".
 
-The first recognition says "Loading OCR models". After that a full screen takes about 0.4 seconds on the author's laptop (AMD Ryzen 7 7840HS); on slower computers it may take several times longer.
+* **Recognize the navigator object.** Opens the result window: arrow keys move through the text, Enter clicks a word, Escape closes the window.
+* **Cycle the recognition language:** Latin or Cyrillic.
+* **Open Paddle OCR settings.**
 
-## Languages
+The first recognition in a session says "Loading OCR models". On processors like the Ryzen 7 7840HS a full screen is recognized in about 0.4 seconds, and small windows in a fraction of a second. On slower hardware it takes longer.
 
-The models read alphabets rather than single languages:
+## Languages and alphabets
 
-- **Latin**: English, German, French, Spanish, Polish and other Latin-script languages. The best accuracy. Does not read Cyrillic.
-- **Cyrillic**: Russian, Ukrainian, Belarusian, Bulgarian, Serbian, Macedonian, Kazakh, Kyrgyz, Tajik, Mongolian, Tatar, Bashkir and other Cyrillic-script languages, plus English (slightly worse than in Latin mode).
+The add-on has two modes, by alphabet:
 
-By default the mode follows the NVDA language. When NVDA is in Russian, Ukrainian, Belarusian or Bulgarian, the Cyrillic mode reads only the letters of these languages; letters of the other Cyrillic languages are read when NVDA itself runs in that language.
+* **Latin:** English, German, French, Spanish, Polish and others. The best accuracy, but Cyrillic is not recognized.
+* **Cyrillic:** Russian, Ukrainian, Belarusian, Bulgarian, Serbian, Kazakh, Tatar, Bashkir and others. English text is recognized too, but slightly less accurately than in the Latin mode.
+
+By default the mode follows the NVDA language. When NVDA is in Russian, Ukrainian, Belarusian or Bulgarian, letters of the other Cyrillic alphabets are turned off, so random artifacts like "һ" instead of "н" do not get into the text.
 
 ## Settings
 
-NVDA menu, Preferences, Settings, category "Paddle OCR":
+NVDA menu: Preferences → Settings → category "Paddle OCR".
 
-- Recognition language.
-- Periodically refresh recognized content (off by default).
-- Automatically say all when recognition finishes (on by default).
+* **Recognition language:** same as NVDA, Latin or Cyrillic.
+* **Periodically refresh recognized content:** the result window re-reads itself while it is open. This keeps the processor busy the whole time, so it is off by default.
+* **Automatically say all when recognition finishes:** the text is read in full right away. If you prefer to read it yourself, turn this off. On by default.
+
+## Limitations
+
+* Icons and interface borders are sometimes recognized as random characters like "x", "o", "+".
+* Short single words made of letters that look the same in both alphabets are sometimes read with the wrong letters.
+* The system library `MSVCP140_1.dll` is required. If recognition reports an error and the NVDA log mentions this library, install the [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170) from Microsoft.
+
+## Version history
+
+See the [releases](../../releases) page; the add-on help lists all versions too.
 
 ## Building
 
