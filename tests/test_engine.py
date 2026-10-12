@@ -83,6 +83,21 @@ def test_word_positions(ocr, size):
 		assert y * k - th <= cy <= y * k + th * 0.3
 
 
+@pytest.mark.parametrize("text", ["Settings", "Cancel", "Open file"])
+def test_small_object(ocr, text):
+	# A button cut tightly around its text: the word must be found and its box must stay inside the image.
+	font, scale, thick = cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1
+	(tw, th), base = cv2.getTextSize(text, font, scale, thick)
+	img = np.full((th + base + 4, tw + 4, 3), 240, np.uint8)
+	cv2.putText(img, text, (2, th + 2), font, scale, (0, 0, 0), thick, cv2.LINE_AA)
+	words = [wd for line in ocr.recognize(img) for wd in line]
+	assert " ".join(wd["text"] for wd in words) == text
+	h, w = img.shape[:2]
+	for wd in words:
+		assert 0 <= wd["x"] and wd["x"] + wd["width"] <= w
+		assert 0 <= wd["y"] and wd["y"] + wd["height"] <= h
+
+
 def test_latinOnly():
 	# Language "en": Latin with diacritics, punctuation and arrows are allowed; CJK, Greek and Cyrillic are not.
 	assert all(engine.latinOnly(c) for c in "Aé9+…→")

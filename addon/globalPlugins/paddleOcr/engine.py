@@ -25,6 +25,11 @@ DET_MIN_SIZE = 3
 # Images with a longer side above this are downscaled for the detector.
 # Downscaling a screen hurts (small fonts vanish), so the limit is high: only for 8K and the like.
 DET_MAX_SIDE = 4000
+# Small images (a button, a label) get a margin of this many pixels for the detector: it often misses text
+# that touches the image edge. Measured on lines cut from screenshots: empty results 10–25% → ~1%.
+# Larger images are left as they are: there a margin only shuffles the result.
+DET_PAD = 16
+DET_PAD_BELOW = 100
 REC_HEIGHT = 48
 # Measured: batches of 4–8 are fastest; larger ones are slower (more width padding).
 REC_BATCH = 4
@@ -71,11 +76,17 @@ def _yaml_scalar(s):
 	return s
 
 
-def _session(path, threads):
+def _session(path, threads, oneShot=False):
 	opts = ort.SessionOptions()
 	opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 	if threads:
 		opts.intra_op_num_threads = threads
+	if oneShot:
+		# For a model that runs once per recognition (the detector). Without the memory arena its large
+		# buffers go back to the system right away (lower peak too). Without spinning its idle threads
+		# do not take CPU from the recognizer that runs next: measured 2–4% faster, ~20% less CPU.
+		opts.enable_cpu_mem_arena = False
+		opts.add_session_config_entry("session.intra_op.allow_spinning", "0")
 	opts.log_severity_level = 3
 	return ort.InferenceSession(str(path), sess_options=opts, providers=["CPUExecutionProvider"])
 
@@ -92,14 +103,23 @@ class OcrEngine:
 	"""Detector + recognizer. allowed(c) tells which characters the recognizer may output (None means all)."""
 
 	def __init__(self, detPath, recPath, recYml, threads=0, allowed=None):
-		self._det = _session(detPath, threads)
+		self._det = _session(detPath, threads, oneShot=True)
 		self._detInput = self._det.get_inputs()[0].name
 		self._rec = Reader(recPath, recYml, threads, allowed)
-		self._runOpts = _run_options()
 
 	def recognize(self, bgr):
 		"""Returns a list of lines; a line is a list of words {x, y, width, height, text}."""
-		boxes = self._detect(bgr)
+		h, w = bgr.shape[:2]
+		if min(h, w) < DET_PAD_BELOW:
+			p = DET_PAD
+			boxes = self._detect(_add_margin(bgr, p))
+			# Back to the coordinates of the original image; the recognizer reads lines from it.
+			boxes = [
+				(max(0, x0 - p), max(0, y0 - p), min(w, x1 - p), min(h, y1 - p)) for x0, y0, x1, y1 in boxes
+			]
+			boxes = [b for b in boxes if b[2] - b[0] >= 2 and b[3] - b[1] >= 2]
+		else:
+			boxes = self._detect(bgr)
 		if not boxes:
 			return []
 		items = [words for words, score in self._rec.read(bgr, boxes) if words and score >= REC_MIN_SCORE]
@@ -121,7 +141,7 @@ class OcrEngine:
 		for c in range(3):
 			np.multiply(img[:, :, c], _DET_SCALE[c], out=x[0, c], dtype=np.float32)
 			x[0, c] -= _DET_SHIFT[c]
-		pred = self._det.run(None, {self._detInput: x}, self._runOpts)[0][0, 0]
+		pred = self._det.run(None, {self._detInput: x})[0][0, 0]
 		return _db_boxes(pred, w / rw, h / rh, w, h)
 
 
@@ -157,7 +177,10 @@ class Reader:
 		# Sort by aspect ratio so a batch holds lines of similar length (less empty padding).
 		order = sorted(range(len(crops)), key=lambda i: crops[i].shape[1] / crops[i].shape[0])
 		results = [None] * len(crops)
-		for start in range(0, len(order), REC_BATCH):
+		# Widest batches first (the batches themselves are the same). The last run returns memory to the
+		# system but keeps its own output, which is then the narrowest one: with 18k classes the output of
+		# the widest lines is ~100 MB and would otherwise stay until the next recognition.
+		for start in reversed(range(0, len(order), REC_BATCH)):
 			idx = order[start : start + REC_BATCH]
 			maxRatio = max(crops[i].shape[1] / crops[i].shape[0] for i in idx)
 			batchW = max(math.ceil(REC_HEIGHT * maxRatio), REC_HEIGHT)
@@ -169,7 +192,7 @@ class Reader:
 				img = cv2.resize(crops[i], (rw, REC_HEIGHT)).astype(np.float32)
 				batch[j, :, :, :rw] = ((img / 255.0 - 0.5) / 0.5).transpose(2, 0, 1)
 				widths.append(rw)
-			last = start + REC_BATCH >= len(order)
+			last = start == 0
 			probs = self._rec.run(
 				None, {self._recInput: batch}, self._lastRunOpts if last else self._runOpts
 			)[0]
@@ -390,6 +413,13 @@ def _script(c):
 	if o < 0x250:
 		return "latin"
 	return None
+
+
+def _add_margin(bgr, pad):
+	"""The image with a margin in its background colour (the median of the edge pixels)."""
+	edge = np.concatenate([bgr[0], bgr[-1], bgr[:, 0], bgr[:, -1]])
+	color = [int(v) for v in np.median(edge, axis=0)]
+	return cv2.copyMakeBorder(bgr, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=color)
 
 
 def _db_boxes(pred, sx, sy, w, h):

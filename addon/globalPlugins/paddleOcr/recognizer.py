@@ -58,7 +58,19 @@ def _getEngine(lang):
 		# Append rather than prepend: NVDA's own modules must not be shadowed by ours.
 		if lib not in sys.path:
 			sys.path.append(lib)
-		from . import engine
+		# numpy's OpenBLAS starts a thread per CPU core and reserves ~30 MB for each (~0.5 GB and 15 threads
+		# on 16 cores). The engine does no matrix math in numpy, so load it single-threaded.
+		# The variable is read only while loading, so it is restored right away
+		# (processes started by NVDA later do not inherit it).
+		old = os.environ.get("OPENBLAS_NUM_THREADS")
+		os.environ["OPENBLAS_NUM_THREADS"] = "1"
+		try:
+			from . import engine
+		finally:
+			if old is None:
+				del os.environ["OPENBLAS_NUM_THREADS"]
+			else:
+				os.environ["OPENBLAS_NUM_THREADS"] = old
 
 		det, rec, latinOnly = LANGUAGES[lang]
 		_engine = None  # Release the old engine first so two are never in memory at once.
