@@ -102,6 +102,18 @@ def test_small_object(ocr, text):
 		assert 0 <= wd["y"] and wd["y"] + wd["height"] <= h
 
 
+def test_wide_lines(ocr):
+	# Very wide boxes are read one at a time and squeezed past REC_MAX_RATIO: words stay inside their boxes.
+	img = np.full((20, 9000, 3), 255, np.uint8)
+	cv2.putText(img, "Settings", (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+	boxes = [(0, 0, 9000, 20), (0, 0, 2000, 20), (0, 0, 80, 20), (0, 0, 60, 20)]
+	results = ocr._rec.read(img, boxes)
+	assert len(results) == len(boxes)
+	for (x0, _y0, x1, _y1), (words, _score) in zip(boxes, results, strict=True):
+		for wd in words:
+			assert x0 <= wd["x"] and wd["x"] + wd["width"] <= x1
+
+
 def test_latinOnly():
 	# Language "en": Latin with diacritics, punctuation and arrows are allowed; CJK, Greek and Cyrillic are not.
 	assert all(engine.latinOnly(c) for c in "Aé9+…→")
@@ -134,6 +146,11 @@ def test_cyrillic_masks():
 		("MlDl", "MIDI"),
 		("Al", "Al"),
 		("tIGHT", "tIGHT"),
+		("XII", "XII"),
+		("VIII", "VIII"),
+		("XlI", "XII"),
+		("userID", "userID"),
+		("getID", "getID"),
 	],
 )
 def test_fix_il(raw, fixed):

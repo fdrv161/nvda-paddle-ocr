@@ -33,6 +33,12 @@ DET_PAD_BELOW = 100
 REC_HEIGHT = 48
 # Measured: batches of 4–8 are fastest; larger ones are slower (more width padding).
 REC_BATCH = 4
+# Memory of one run grows with batch × width × dictionary size (18k characters in the Latin mode).
+# Lines wider than REC_WIDE_RATIO heights (rare: a full-width 4K line) are read one at a time,
+# and lines wider than REC_MAX_RATIO heights (not text: separators) are squeezed to that width.
+# This keeps one run under ~150 MB.
+REC_WIDE_RATIO = 80
+REC_MAX_RATIO = 320
 # Lines the recognizer is unsure about (usually icons and borders) are dropped.
 REC_MIN_SCORE = 0.5
 # Pieces at the same height separated by more than this many line heights are separate lines (columns).
@@ -175,15 +181,20 @@ class Reader:
 		"""For each box: (words, confidence); there may be no words."""
 		crops = [bgr[y0:y1, x0:x1] for (x0, y0, x1, y1) in boxes]
 		# Sort by aspect ratio so a batch holds lines of similar length (less empty padding).
-		order = sorted(range(len(crops)), key=lambda i: crops[i].shape[1] / crops[i].shape[0])
+		ratio = [min(c.shape[1] / c.shape[0], REC_MAX_RATIO) for c in crops]
+		order = sorted(range(len(crops)), key=lambda i: ratio[i])
+		batches = []
+		for i in order:
+			if ratio[i] > REC_WIDE_RATIO or not batches or len(batches[-1]) == REC_BATCH:
+				batches.append([i])
+			else:
+				batches[-1].append(i)
 		results = [None] * len(crops)
-		# Widest batches first (the batches themselves are the same). The last run returns memory to the
-		# system but keeps its own output, which is then the narrowest one: with 18k classes the output of
-		# the widest lines is ~100 MB and would otherwise stay until the next recognition.
-		for start in reversed(range(0, len(order), REC_BATCH)):
-			idx = order[start : start + REC_BATCH]
-			maxRatio = max(crops[i].shape[1] / crops[i].shape[0] for i in idx)
-			batchW = max(math.ceil(REC_HEIGHT * maxRatio), REC_HEIGHT)
+		# Widest batches first. The last run returns memory to the system but keeps its own output,
+		# which is then the narrowest one: with 18k classes the output of the widest lines is ~100 MB
+		# and would otherwise stay until the next recognition.
+		for n, idx in reversed(list(enumerate(batches))):
+			batchW = max(math.ceil(REC_HEIGHT * max(ratio[i] for i in idx)), REC_HEIGHT)
 			batch = np.zeros((len(idx), 3, REC_HEIGHT, batchW), dtype=np.float32)
 			widths = []
 			for j, i in enumerate(idx):
@@ -192,7 +203,7 @@ class Reader:
 				img = cv2.resize(crops[i], (rw, REC_HEIGHT)).astype(np.float32)
 				batch[j, :, :, :rw] = ((img / 255.0 - 0.5) / 0.5).transpose(2, 0, 1)
 				widths.append(rw)
-			last = start == 0
+			last = n == 0
 			probs = self._rec.run(
 				None, {self._recInput: batch}, self._lastRunOpts if last else self._runOpts
 			)[0]
@@ -298,12 +309,20 @@ def _fix_il(text):
 	"""Capital I and lowercase l look the same in sans-serif fonts; the model mixes them up: "AlI", "AII".
 
 	Only clear cases are fixed:
-	- I after a lowercase letter and not before a lowercase one is l ("AlI" → "All", "FiII" → "Fill";
-		"AddIn" is left alone: a lowercase letter follows the I);
+	- I after a lowercase letter and not before another letter but I is l ("AlI" → "All", "FiII" → "Fill";
+		"AddIn" and "userID" are left alone: a letter follows the I);
 	- a capital followed only by I/l, 3+ letters in total, means lowercase l ("AII" → "All");
 	- in an all-caps word (2+ capitals) a lowercase l is I ("TlGHT" → "TIGHT", "MlDl" → "MIDI").
 	"""
-	if len(text) >= 3 and text[0].isupper() and text[0] not in "Il" and set(text[1:]) <= {"I", "l"}:
+	# Roman numerals ("XII", "VIII") are left alone; a stray l in them ("XlI") is fixed by the next rule.
+	roman = set(text.replace("l", "I")) <= set("IVXLCDM")
+	if (
+		len(text) >= 3
+		and text[0].isupper()
+		and text[0] not in "Il"
+		and set(text[1:]) <= {"I", "l"}
+		and not roman
+	):
 		return text[0] + "l" * (len(text) - 1)
 	letters = [c for c in text if c.isalpha()]
 	if (
@@ -323,7 +342,8 @@ def _fix_il(text):
 			chars[i] == "I"
 			and chars[i - 1].islower()
 			and _script(chars[i - 1]) == "latin"
-			and not nxt.islower()
+			# Before another capital the I is real: "userID", "getID".
+			and (not nxt.isalpha() or nxt == "I")
 		):
 			chars[i] = "l"
 	return "".join(chars)

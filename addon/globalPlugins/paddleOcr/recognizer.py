@@ -130,6 +130,8 @@ class PaddleOcr(ContentRecognizer):
 	def __init__(self):
 		# Tag of the current request: if the request was cancelled, its result is silently dropped.
 		self._current = None
+		# Checking and clearing the tag must not interleave with a new request setting it.
+		self._tokenLock = threading.Lock()
 
 	def getResizeFactor(self, width, height):
 		# The engine picks the scale itself and returns coordinates in capture pixels.
@@ -144,7 +146,8 @@ class PaddleOcr(ContentRecognizer):
 			# Translators: Spoken once, while OCR models are loaded for the first recognition.
 			ui.message(_("Loading OCR models"))
 		token = object()
-		self._current = token
+		with self._tokenLock:
+			self._current = token
 		threading.Thread(
 			target=self._run,
 			args=(buf, imageInfo, onResult, token, lang),
@@ -175,10 +178,14 @@ class PaddleOcr(ContentRecognizer):
 			except Exception as e:
 				log.exception("Paddle OCR: recognition failed")
 				result = e
-		if self._current is token:
-			self._current = None
+		with self._tokenLock:
+			deliver = self._current is token
+			if deliver:
+				self._current = None
+		if deliver:
 			# recogUi itself moves the result to the NVDA main thread.
 			onResult(result)
 
 	def cancel(self):
-		self._current = None
+		with self._tokenLock:
+			self._current = None
