@@ -2,7 +2,7 @@
 
 ## About
 
-Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R) for [NVDA](https://www.nvaccess.org/) 2026.3 and later. The add-on uses compact recognition models from Baidu ([PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0)) that run locally through [onnxruntime](https://github.com/microsoft/onnxruntime) right inside NVDA — no internet and no third-party applications. The engine reads small fonts and text on dark backgrounds more accurately. The result window and the behaviour with Screen Curtain on are the same as you are used to in NVDA.
+Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R) for NVDA 2026.3 and later. The add-on uses compact PaddleOCR recognition models from Baidu that run locally through onnxruntime right inside NVDA — no internet and no third-party applications. The engine is usually more accurate, especially with small fonts, text on dark backgrounds and custom interfaces such as audio plugins. The result window and Screen Curtain support work the same as with Windows OCR.
 
 ## Installation
 
@@ -12,13 +12,13 @@ Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R) for [NVDA](htt
 
 ## Commands
 
-There are no default gestures, so nothing conflicts with other add-ons. Assign them in the NVDA menu: Preferences → Input gestures → category "Paddle OCR".
+There are no default gestures, so nothing conflicts with other add-ons. Assign them in the NVDA menu: Preferences, Input gestures, category "Paddle OCR".
 
 * **Recognize the navigator object.** Opens the result window: arrow keys move through the text, Enter clicks a word, Escape closes the window.
 * **Cycle the recognition language:** Latin or Cyrillic.
 * **Open Paddle OCR settings.**
 
-The first recognition in a session says "Loading OCR models". On processors like the Ryzen 7 7840HS a full screen is recognized in about 0.4 seconds, and small windows in a fraction of a second. On slower hardware it takes longer.
+The first recognition in a session says "Loading OCR models". On the author's laptop (Ryzen 7 7840HS) a full screen is recognized in about 0.4 seconds, and small windows in a fraction of a second. On slower computers it may take several times longer.
 
 ## Languages and alphabets
 
@@ -27,11 +27,13 @@ The add-on has two modes, by alphabet:
 * **Latin:** English, German, French, Spanish, Polish and others. The best accuracy, but Cyrillic is not recognized.
 * **Cyrillic:** Russian, Ukrainian, Belarusian, Bulgarian, Serbian, Kazakh, Tatar, Bashkir and others. English text is recognized too, but slightly less accurately than in the Latin mode.
 
-By default the mode follows the NVDA language. When NVDA is in Russian, Ukrainian, Belarusian or Bulgarian, letters of the other Cyrillic alphabets are turned off, so random artifacts like "һ" instead of "н" do not get into the text.
+By default the mode follows the NVDA language. For an application in English, Latin works best; for one in Russian, Cyrillic.
+
+When NVDA is in Russian, Ukrainian, Belarusian or Bulgarian, letters of the other Cyrillic alphabets are turned off, so random artifacts like "һ" instead of "н" do not get into the text. Letters of, for example, Kazakh or Serbian are read when NVDA itself runs in that language.
 
 ## Settings
 
-NVDA menu: Preferences → Settings → category "Paddle OCR".
+NVDA menu: Preferences, Settings, category "Paddle OCR".
 
 * **Recognition language:** same as NVDA, Latin or Cyrillic.
 * **Periodically refresh recognized content:** the result window re-reads itself while it is open. This keeps the processor busy the whole time, so it is off by default.
@@ -45,7 +47,7 @@ NVDA menu: Preferences → Settings → category "Paddle OCR".
 
 ## Version history
 
-See the [releases](../../releases) page; the add-on help lists all versions too.
+What is new in each version is on the [releases page](https://github.com/fdrv161/nvda-paddle-ocr/releases).
 
 ## Building
 
@@ -73,6 +75,10 @@ python -m venv .venv
 
 To release, set `version` in `addon/manifest.ini` and push a tag with the same version, for example `v1.1.0`. GitHub Actions runs the tests, builds the add-on and publishes the release.
 
-## License
+## Links and licenses
 
-The add-on code is licensed under the [GNU GPL version 2 or later](LICENSE). Bundled components keep their own licenses: PaddleOCR models and OpenCV (Apache 2.0), onnxruntime (MIT), NumPy (BSD). Their license texts are included in the add-on.
+Source code, bug tracker and discussions are in the [GitHub repository](https://github.com/fdrv161/nvda-paddle-ocr).
+
+Projects used: [NVDA](https://www.nvaccess.org/), [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), [onnxruntime](https://github.com/microsoft/onnxruntime), [OpenCV](https://opencv.org/), [NumPy](https://numpy.org/).
+
+The add-on code is licensed under the [GPL v2 or later](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html), PaddleOCR models and OpenCV under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0), onnxruntime under [MIT](https://opensource.org/licenses/MIT), NumPy under [BSD](https://opensource.org/licenses/BSD-3-Clause).
