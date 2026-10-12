@@ -20,13 +20,39 @@ addonHandler.initTranslation()
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
 _MODELS = os.path.join(_DIR, "models")
-# Language → (detector, recognizer, Latin only). The detector is shared.
+# Language → (detector, recognizer). The detector is shared. The internal keys stay "en" and "ru"
+# so that saved settings keep working; for the user these are the Latin and Cyrillic modes.
 # "en" is the best model for Latin script; CJK is banned for it, otherwise icons are read as "平".
-# "ru" is eslav: reads both Russian and English (English slightly worse than "en").
+# "ru" is the Cyrillic model: 33 Cyrillic languages and English (English slightly worse than "en").
 LANGUAGES = {
-	"en": ("det_v6_tiny", "rec_v6_small", True),
-	"ru": ("det_v6_tiny", "rec_eslav_v5", False),
+	"en": ("det_v6_tiny", "rec_v6_small"),
+	"ru": ("det_v6_tiny", "rec_cyrillic_v5"),
 }
+# NVDA languages written in Cyrillic: for them the Cyrillic mode is the default.
+_CYRILLIC_NVDA = {
+	"ru",
+	"uk",
+	"be",
+	"bg",
+	"sr",
+	"mk",
+	"kk",
+	"ky",
+	"tg",
+	"mn",
+	"tt",
+	"ba",
+	"cv",
+	"sah",
+	"os",
+	"ce",
+}
+# With these NVDA languages only their letters are allowed (see engine.eastSlavicOnly).
+_EAST_SLAVIC_NVDA = {"ru", "uk", "be", "bg"}
+
+
+def _nvdaLanguage():
+	return languageHandler.getLanguage().split("_")[0]
 
 
 def languageName(lang):
@@ -40,8 +66,7 @@ def getLanguage(auto=False):
 	lang = config.conf["paddleOcr"]["language"]
 	if lang in LANGUAGES and not auto:
 		return lang
-	# Cyrillic-script NVDA languages that the eslav model can read.
-	return "ru" if languageHandler.getLanguage().split("_")[0] in ("ru", "uk", "be", "bg") else "en"
+	return "ru" if _nvdaLanguage() in _CYRILLIC_NVDA else "en"
 
 
 # One engine for the whole NVDA session: loading is slow, but requests after it are fast.
@@ -72,13 +97,20 @@ def _getEngine(lang):
 			else:
 				os.environ["OPENBLAS_NUM_THREADS"] = old
 
-		det, rec, latinOnly = LANGUAGES[lang]
+		det, rec = LANGUAGES[lang]
+		if lang == "en":
+			allowed = engine.latinOnly
+		elif _nvdaLanguage() in _CYRILLIC_NVDA - _EAST_SLAVIC_NVDA:
+			# NVDA in Kazakh, Serbian, etc.: the letters of that language are needed.
+			allowed = engine.anyCyrillic
+		else:
+			allowed = engine.eastSlavicOnly
 		_engine = None  # Release the old engine first so two are never in memory at once.
 		_engine = engine.OcrEngine(
 			os.path.join(_MODELS, det, "inference.onnx"),
 			os.path.join(_MODELS, rec, "inference.onnx"),
 			os.path.join(_MODELS, rec, "inference.yml"),
-			allowed=engine.latinOnly if latinOnly else None,
+			allowed=allowed,
 		)
 		_engineLang = lang
 	return _engine

@@ -34,7 +34,7 @@ jobs:
           if ("v$v" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} does not match version $v in addon/manifest.ini" }
 
       - name: Models
-        run: python tools/fetch_models.py det_v6_tiny rec_v6_small rec_eslav_v5
+        run: python tools/fetch_models.py det_v6_tiny rec_v6_small rec_cyrillic_v5
 
       - name: Libraries
         run: python tools/fetch_libs.py

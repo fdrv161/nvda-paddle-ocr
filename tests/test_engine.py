@@ -20,11 +20,15 @@ MODELS = PLUGIN / "models"
 
 @pytest.fixture(scope="module")
 def ocr():
-	if not (MODELS / "rec_eslav_v5").is_dir():
+	if not (MODELS / "rec_cyrillic_v5").is_dir():
 		pytest.skip("No models in the add-on: run tools/fetch_libs.py")
-	rec = MODELS / "rec_eslav_v5"
+	rec = MODELS / "rec_cyrillic_v5"
+	# As in the add-on with NVDA in Russian.
 	return engine.OcrEngine(
-		MODELS / "det_v6_tiny" / "inference.onnx", rec / "inference.onnx", rec / "inference.yml"
+		MODELS / "det_v6_tiny" / "inference.onnx",
+		rec / "inference.onnx",
+		rec / "inference.yml",
+		allowed=engine.eastSlavicOnly,
 	)
 
 
@@ -102,6 +106,15 @@ def test_latinOnly():
 	# Language "en": Latin with diacritics, punctuation and arrows are allowed; CJK, Greek and Cyrillic are not.
 	assert all(engine.latinOnly(c) for c in "Aé9+…→")
 	assert not any(engine.latinOnly(c) for c in "平γП∏")
+
+
+def test_cyrillic_masks():
+	# Cyrillic mode: with NVDA in Russian only East Slavic letters, otherwise all modern Cyrillic.
+	assert all(engine.eastSlavicOnly(c) for c in "ЁёЇїЎўҐґЪъAz9+…→№")
+	assert not any(engine.eastSlavicOnly(c) for c in "һЈјҚқӘәЂѣ")
+	assert all(engine.anyCyrillic(c) for c in "ЁёһЈјҚқӘәЂђЉљ№")
+	# Historic letters stay banned in both.
+	assert not any(engine.anyCyrillic(c) for c in "ѢѣѪѫꙀⷠ")
 
 
 @pytest.mark.parametrize(

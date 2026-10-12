@@ -19,9 +19,11 @@ The first recognition says "Loading OCR models". After that a full screen takes 
 The models read alphabets rather than single languages.
 
 * **Latin**: English, German, French, Spanish, Polish and other Latin-script languages. The best accuracy. Cyrillic is not read in this mode.
-* **Cyrillic**: Russian, Ukrainian, Belarusian and Bulgarian, plus English (slightly worse than in Latin mode). Serbian and Macedonian letters are not supported.
+* **Cyrillic**: Russian, Ukrainian, Belarusian, Bulgarian, Serbian, Macedonian, Kazakh, Kyrgyz, Tajik, Mongolian, Tatar, Bashkir and other Cyrillic-script languages, plus English (slightly worse than in Latin mode).
 
 By default the mode follows the NVDA interface language.
+
+When NVDA is in Russian, Ukrainian, Belarusian or Bulgarian, the Cyrillic mode reads only the letters of these languages, so lookalike letters of other alphabets do not slip into the text. Letters of the other Cyrillic languages are read when NVDA itself runs in that language.
 
 ## Settings
 

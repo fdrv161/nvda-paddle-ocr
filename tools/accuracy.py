@@ -131,7 +131,7 @@ def match(lines, truth):
 def main():
 	ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 	ap.add_argument("--det", default="det_v6_tiny")
-	ap.add_argument("--rec", default="rec_eslav_v5")
+	ap.add_argument("--rec", default="rec_cyrillic_v5")
 	ap.add_argument("--latin", action="store_true", help="только латиница (как язык «en» в дополнении)")
 	ap.add_argument("--set", action="append", default=[], metavar="ИМЯ=ЗНАЧЕНИЕ")
 	ap.add_argument("--show", type=int, default=0, help="сколько худших строк напечатать")

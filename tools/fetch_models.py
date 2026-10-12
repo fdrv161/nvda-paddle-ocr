@@ -2,7 +2,7 @@
 
 Run: .venv/Scripts/python tools/fetch_models.py [model names]
   without names: all models (for measurements); only those for the add-on:
-  .venv/Scripts/python tools/fetch_models.py det_v6_tiny rec_v6_small rec_eslav_v5
+  .venv/Scripts/python tools/fetch_models.py det_v6_tiny rec_v6_small rec_cyrillic_v5
 Running it again does not re-download what is already there.
 At the end writes models/manifest.json with sizes and sha256, used later to
 check that exactly those files went into the add-on.
@@ -26,6 +26,7 @@ REPOS = {
 	"rec_v6_small": "PaddlePaddle/PP-OCRv6_small_rec_onnx",
 	"rec_v6_medium": "PaddlePaddle/PP-OCRv6_medium_rec_onnx",
 	"rec_eslav_v5": "PaddlePaddle/eslav_PP-OCRv5_mobile_rec_onnx",
+	"rec_cyrillic_v5": "PaddlePaddle/cyrillic_PP-OCRv5_mobile_rec_onnx",
 }
 # inference.yml holds the recognizer settings and character dictionary.
 FILES = ("inference.onnx", "inference.yml")

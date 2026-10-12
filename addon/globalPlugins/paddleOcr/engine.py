@@ -398,6 +398,34 @@ def latinOnly(c):
 	return o < 0x250 or 0x2000 <= o < 0x2200
 
 
+# Russian, Ukrainian and Belarusian letters; Bulgarian uses the Russian ones.
+_EAST_SLAVIC = set("АБВГҐДЕЁЄЖЗИІЇЙКЛМНОПРСТУЎФХЦЧШЩЪЫЬЭЮЯабвгґдеёєжзиіїйклмнопрстуўфхцчшщъыьэюя")
+
+
+def _is_cyrillic(o):
+	# Main block with its supplement, and the two blocks of historic letters (Extended-A and -B).
+	return 0x400 <= o <= 0x52F or 0x2DE0 <= o <= 0x2DFF or 0xA640 <= o <= 0xA69F
+
+
+def anyCyrillic(c):
+	"""Cyrillic of all modern languages, Latin and symbols.
+
+	Historic letters (Old Church Slavonic: "Ѣ", "Ѫ", combining letters) are banned: no screen uses them,
+	and the model could read icons as them.
+	"""
+	o = ord(c)
+	return not (_is_cyrillic(o) and (o >= 0x2DE0 or 0x460 <= o <= 0x489))
+
+
+def eastSlavicOnly(c):
+	"""Russian, Ukrainian, Belarusian and Bulgarian letters, Latin and symbols.
+
+	Letters of other Cyrillic alphabets are banned: without this the model sometimes puts
+	a lookalike into Russian text, for example Kazakh "һ" instead of "н" or Serbian "Ј".
+	"""
+	return not _is_cyrillic(ord(c)) or c in _EAST_SLAVIC
+
+
 def bgraToBgr(buf, width, height):
 	"""NVDA screenshot (RGBQUAD bytes: blue, green, red, unused) → BGR image for the engine."""
 	return np.frombuffer(buf, dtype=np.uint8).reshape(height, width, 4)[:, :, :3].copy()
@@ -408,7 +436,7 @@ def _script(c):
 	if not c.isalpha():
 		return None
 	o = ord(c)
-	if 0x400 <= o <= 0x4FF:
+	if 0x400 <= o <= 0x52F:
 		return "cyr"
 	if o < 0x250:
 		return "latin"

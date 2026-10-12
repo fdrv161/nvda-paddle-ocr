@@ -1,7 +1,7 @@
 PaddleOCR models bundled in this add-on (globalPlugins/paddleOcr/models):
 - det_v6_tiny: PaddlePaddle/PP-OCRv6_tiny_det_onnx
 - rec_v6_small: PaddlePaddle/PP-OCRv6_small_rec_onnx
-- rec_eslav_v5: PaddlePaddle/eslav_PP-OCRv5_mobile_rec_onnx
+- rec_cyrillic_v5: PaddlePaddle/cyrillic_PP-OCRv5_mobile_rec_onnx
 Source: https://huggingface.co/PaddlePaddle, https://github.com/PaddlePaddle/PaddleOCR
 Copyright (c) PaddlePaddle Authors. Licensed under the Apache License, Version 2.0 (text below).
 
