@@ -12,7 +12,7 @@ There are no default gestures. Assign them in the NVDA menu, Preferences, Input 
 * **Cycles through the available languages**: Latin or Cyrillic.
 * **Shows the Paddle OCR settings**.
 
-The first recognition says "Loading OCR models". After that a full screen takes about 0.4 seconds.
+The first recognition says "Loading OCR models". After that a full screen takes about 0.4 seconds on the author's laptop (AMD Ryzen 7 7840HS); on slower computers it may take several times longer.
 
 ## Languages
 
