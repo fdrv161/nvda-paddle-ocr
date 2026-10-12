@@ -8,6 +8,7 @@ import ctypes
 import os
 import sys
 import threading
+import time
 
 import addonHandler
 import config
@@ -156,11 +157,21 @@ class PaddleOcr(ContentRecognizer):
 			if self._current is not token:
 				return
 			try:
+				start = time.perf_counter()
 				eng = _getEngine(lang)
+				loaded = time.perf_counter()
 				from . import engine
 
 				bgr = engine.bgraToBgr(buf, imageInfo.recogWidth, imageInfo.recogHeight)
-				result = LinesWordsResult(eng.recognize(bgr), imageInfo)
+				lines = eng.recognize(bgr)
+				# Only with the NVDA log level set to debug: to compare speed on other computers.
+				# Numbers only, never the recognized text.
+				log.debug(
+					f"Paddle OCR: {lang}, {imageInfo.recogWidth}x{imageInfo.recogHeight}, "
+					f"{len(lines)} lines, loading {loaded - start:.2f} s, "
+					f"recognition {time.perf_counter() - loaded:.2f} s",
+				)
+				result = LinesWordsResult(lines, imageInfo)
 			except Exception as e:
 				log.exception("Paddle OCR: recognition failed")
 				result = e
