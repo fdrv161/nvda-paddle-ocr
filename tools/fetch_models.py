@@ -18,6 +18,11 @@ ROOT = Path(__file__).resolve().parent.parent
 MODELS_DIR = ROOT / "models"
 
 # Folder name -> PaddlePaddle repository on Hugging Face. All Apache 2.0.
+# Only three models go into the add-on (MODELS in fetch_libs.py); the others are kept for bench.py.
+# Rejected: the faster ones recognize worse (and on my hardware they were not much faster),
+# the slower ones recognize a bit better, but not enough to be worth the lost speed.
+# det_v6_small was not better at all and merged columns.
+# eslav_v5 just made more mistakes than cyrillic_v5, at the same speed.
 REPOS = {
 	"det_v6_tiny": "PaddlePaddle/PP-OCRv6_tiny_det_onnx",
 	"det_v6_small": "PaddlePaddle/PP-OCRv6_small_det_onnx",
