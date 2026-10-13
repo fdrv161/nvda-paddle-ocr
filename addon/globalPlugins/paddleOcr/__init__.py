@@ -96,16 +96,25 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	def script_recognizeNavigatorObject(self, gesture):
 		from contentRecog import recogUi
 
-		from .recognizer import PaddleOcr
+		from .recognizer import STUCK_AFTER, PaddleOcr
 
 		if self._recognizer is None:
 			self._recognizer = PaddleOcr()
-		elif self._recognizer.busy:
+		seconds = self._recognizer.busySeconds()
+		if seconds is not None and seconds < STUCK_AFTER:
 			# Pressing the command again while recognizing would cancel the running recognition
 			# and queue a new one; keep the running one instead.
 			# Translators: Spoken when the recognition command is pressed while a recognition is running.
 			ui.message(_("Recognition in progress"))
 			return
+		if seconds is not None:
+			# Translators: Spoken when the command is pressed and the previous recognition runs too long:
+			# it is dropped and a new one starts. {seconds} is a number of seconds.
+			message = _(
+				"The previous recognition did not finish in {seconds} seconds, starting again. "
+				"If it hangs again, restart NVDA",
+			)
+			ui.message(message.format(seconds=STUCK_AFTER))
 		# From here on everything is as with Windows OCR:
 		# capture (also with Screen Curtain), result window, clicking words.
 		recogUi.recognizeNavigatorObject(self._recognizer)

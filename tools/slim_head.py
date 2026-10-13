@@ -19,10 +19,21 @@ from onnx import TensorProto, helper, numpy_helper
 
 # Dictionary columns per slice: measured, 1024-2048 is the fastest; memory is the same.
 SLICE = 2048
+SUPPORTED_OPSETS = (11, 12)
 
 
 def slim_head(src, dst):
 	model = onnx.load(str(src))
+	# The nodes below use the opset 11-12 form (ReduceSum takes axes as an attribute; from opset 13
+	# it is an input). Refuse other models instead of building one onnxruntime would reject.
+	opset = next((o.version for o in model.opset_import if o.domain in ("", "ai.onnx")), None)
+	if opset not in SUPPORTED_OPSETS:
+		raise SystemExit(
+			f"Ошибка: {src} в формате opset {opset}, а slim_head.py умеет только opset "
+			f"{min(SUPPORTED_OPSETS)}–{max(SUPPORTED_OPSETS)} (как у нынешних моделей PaddleOCR). "
+			"Что сделать: уберите модель из SLIM_HEAD в tools/fetch_libs.py (она скопируется без переделки) "
+			"или доработайте узлы ReduceSum и ReduceMax в slim_head.py под новый формат.",
+		)
 	graph = model.graph
 	inits = {i.name: i for i in graph.initializer}
 	producer = {out: node for node in graph.node for out in node.output}

@@ -13,6 +13,7 @@ import time
 import addonHandler
 import config
 import languageHandler
+import queueHandler
 import ui
 from contentRecog import ContentRecognizer, LinesWordsResult
 from logHandler import log
@@ -69,6 +70,10 @@ _engine = None
 _engineLang = None
 # One request at a time, even if two threads managed to start.
 _runLock = threading.Lock()
+# A recognition running longer than this many seconds is taken as stuck: the command may start
+# a new one, and a new one does not wait longer than this for the old one (a running model cannot
+# be stopped; its result is dropped).
+STUCK_AFTER = 30
 
 
 def _getEngine(lang):
@@ -127,11 +132,12 @@ class PaddleOcr(ContentRecognizer):
 		self._current = None
 		# Checking and clearing the tag must not interleave with a new request setting it.
 		self._tokenLock = threading.Lock()
+		self._started = 0.0
 
-	@property
-	def busy(self):
-		"""A recognition was asked and its result has not been delivered or cancelled yet."""
-		return self._current is not None
+	def busySeconds(self):
+		"""Seconds since the current request was asked, or None if there is none (delivered or cancelled)."""
+		with self._tokenLock:
+			return None if self._current is None else time.monotonic() - self._started
 
 	def getResizeFactor(self, width, height):
 		# The engine picks the scale itself and returns coordinates in capture pixels.
@@ -148,6 +154,7 @@ class PaddleOcr(ContentRecognizer):
 		token = object()
 		with self._tokenLock:
 			self._current = token
+			self._started = time.monotonic()
 		threading.Thread(
 			target=self._run,
 			args=(buf, imageInfo, onResult, token, lang),
@@ -156,7 +163,16 @@ class PaddleOcr(ContentRecognizer):
 		).start()
 
 	def _run(self, buf, imageInfo, onResult, token, lang):
-		with _runLock:
+		# A previous recognition stuck in the model keeps the lock: do not wait for it forever.
+		if not _runLock.acquire(timeout=STUCK_AFTER):
+			log.error("Paddle OCR: the previous recognition still runs, a new one cannot start")
+			if self._take(token):
+				# Translators: Spoken when a new recognition cannot start because the previous one hangs.
+				message = _("Paddle OCR is still busy with the previous recognition. Restart NVDA")
+				queueHandler.queueFunction(queueHandler.eventQueue, ui.message, message)
+				onResult(TimeoutError("Paddle OCR: the previous recognition does not finish"))
+			return
+		try:
 			if self._current is not token:
 				return
 			try:
@@ -178,13 +194,19 @@ class PaddleOcr(ContentRecognizer):
 			except Exception as e:
 				log.exception("Paddle OCR: recognition failed")
 				result = e
-		with self._tokenLock:
-			deliver = self._current is token
-			if deliver:
-				self._current = None
-		if deliver:
+		finally:
+			_runLock.release()
+		if self._take(token):
 			# recogUi itself moves the result to the NVDA main thread.
 			onResult(result)
+
+	def _take(self, token):
+		"""True if token is still the current request; it is then no longer pending."""
+		with self._tokenLock:
+			if self._current is not token:
+				return False
+			self._current = None
+			return True
 
 	def cancel(self):
 		with self._tokenLock:

@@ -195,7 +195,8 @@ class Reader:
 		# of the dictionary), numbered from the slice start. The output then has them in order.
 		self._keepFeeds = {}
 		if slim:
-			keep = self._keep if self._keep is not None else np.arange(classes)
+			# The model inputs are int64; numpy's default int is not on every platform and version.
+			keep = (self._keep if self._keep is not None else np.arange(classes)).astype(np.int64)
 			step = int(meta["slice"])
 			self._keepFeeds = {
 				f"keep{i}": keep[(keep >= start) & (keep < start + step)] - start
@@ -230,8 +231,8 @@ class Reader:
 				batches[-1].append(i)
 		results = [None] * len(crops)
 		# Widest batches first. The last run returns memory to the system but keeps its own output,
-		# which is then the narrowest one: with 18k classes the output of the widest lines is ~100 MB
-		# and would otherwise stay until the next recognition.
+		# which is then the narrowest one, so the larger outputs of wide batches do not stay
+		# until the next recognition (with an original 18k-class head they reach ~100 MB).
 		for n, idx in reversed(list(enumerate(batches))):
 			batchW = max(math.ceil(REC_HEIGHT * max(ratio[i] for i in idx)), REC_HEIGHT)
 			batch = np.zeros((len(idx), 3, REC_HEIGHT, batchW), dtype=np.float32)
@@ -576,7 +577,18 @@ def _join_strips(parts, margin):
 			ownTop, ownBottom, top, bottom, _boxes = parts[k]
 			missed[k] = (max(0, top - y0) + max(0, y1 - bottom), not ownTop <= cy < ownBottom)
 		best = min(missed, key=missed.get)
-		boxes += [box for box, k, _own in members if k == best]
+		_ownTop, _ownBottom, top, bottom, _boxes = parts[best]
+		for box, k, _own in members:
+			if k != best:
+				continue
+			bx0, by0, bx1, by1 = box
+			# A line taller than both strips can see (huge text) is cut in each of them: a box that
+			# reaches the edge of its strip gets the rows the neighbour strip saw past that edge.
+			if top > y0 and by0 <= top + margin:
+				by0 = y0
+			if bottom < y1 and by1 >= bottom - margin:
+				by1 = y1
+			boxes.append((bx0, by0, bx1, by1))
 	return boxes
 
 

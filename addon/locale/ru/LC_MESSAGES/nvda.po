@@ -41,3 +41,13 @@ msgstr "Загрузка моделей OCR"
 
 msgid "Recognition in progress"
 msgstr "Распознавание уже идёт"
+
+msgid ""
+"The previous recognition did not finish in {seconds} seconds, starting "
+"again. If it hangs again, restart NVDA"
+msgstr ""
+"Предыдущее распознавание не закончилось за {seconds} секунд, начинаю "
+"заново. Если зависнет снова, перезапустите NVDA"
+
+msgid "Paddle OCR is still busy with the previous recognition. Restart NVDA"
+msgstr "Paddle OCR всё ещё занят предыдущим распознаванием. Перезапустите NVDA"

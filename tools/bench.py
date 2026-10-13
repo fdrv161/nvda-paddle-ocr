@@ -108,16 +108,20 @@ def load_images(paths):
 
 def run_one(label, det, rec, allowed, paths, models=PLUGIN_MODELS):
 	"""One mode in the current process: load time, speed, memory now and at the peak."""
+	files = [models / det / "inference.onnx", models / rec / "inference.onnx", models / rec / "inference.yml"]
+	missing = [str(f) for f in files if not f.exists()]
+	if missing:
+		hint = (
+			"сначала запустите tools/fetch_models.py, затем tools/fetch_libs.py"
+			if models == PLUGIN_MODELS
+			else f"скачайте модели: tools/fetch_models.py {det} {rec}"
+		)
+		raise SystemExit(f"Ошибка: нет файлов модели: {', '.join(missing)}. Что сделать: {hint}.")
 	images = load_images(paths)
 	now, _peak = memory()
 	print(f"\n{label} ({det} + {rec}). Память до загрузки: {now:.0f} МБ")
 	t = time.perf_counter()
-	eng = engine.OcrEngine(
-		models / det / "inference.onnx",
-		models / rec / "inference.onnx",
-		models / rec / "inference.yml",
-		allowed=allowed,
-	)
+	eng = engine.OcrEngine(*files, allowed=allowed)
 	now, peak = memory()
 	print(f"Загрузка {time.perf_counter() - t:.2f} с, память после загрузки {now:.0f} МБ")
 	for name, img in images:

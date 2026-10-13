@@ -133,6 +133,8 @@ def test_join_strips():
 		(10, 96, 140, 136),
 		(160, 96, 300, 136),
 	]
+	# Huge text cut by both strips: the box of the strip that misses less gets the rows the other one saw.
+	assert join([(10, 40, 300, 134)], [(10, 66, 300, 170)]) == [(10, 40, 300, 170)]
 	# A piece of a line whose centre is past the cut, not found by the owning strip: dropped.
 	assert join([(10, 100, 300, 130)], []) == []
 	# Neighbouring lines that touch at the cut stay two lines.
@@ -229,6 +231,25 @@ def test_slim_head():
 		assert wordsA == wordsB
 		assert scoreA == pytest.approx(scoreB, abs=1e-4)
 	assert "Settings" in [wd["text"] for wd in a[0][0]]
+
+
+def test_slim_head_refuses_new_opset(tmp_path):
+	# slim_head.py builds opset 11-12 nodes: a newer model must stop with a clear message, not a broken file.
+	onnx = pytest.importorskip("onnx")
+	sys.path.insert(0, str(ROOT / "tools"))
+	from slim_head import slim_head
+
+	graph = onnx.helper.make_graph(
+		[onnx.helper.make_node("Softmax", ["x"], ["y"])],
+		"g",
+		[onnx.helper.make_tensor_value_info("x", onnx.TensorProto.FLOAT, [1, 2])],
+		[onnx.helper.make_tensor_value_info("y", onnx.TensorProto.FLOAT, [1, 2])],
+	)
+	src = tmp_path / "new.onnx"
+	onnx.save(onnx.helper.make_model(graph, opset_imports=[onnx.helper.make_opsetid("", 17)]), str(src))
+	with pytest.raises(SystemExit, match="opset 17"):
+		slim_head(src, tmp_path / "out.onnx")
+	assert not (tmp_path / "out.onnx").exists()
 
 
 def test_latinOnly():
