@@ -3,6 +3,12 @@ PaddleOCR models bundled in this add-on (globalPlugins/paddleOcr/models):
 - rec_v6_small: PaddlePaddle/PP-OCRv6_small_rec_onnx
 - rec_cyrillic_v5: PaddlePaddle/cyrillic_PP-OCRv5_mobile_rec_onnx
 Source: https://huggingface.co/PaddlePaddle, https://github.com/PaddlePaddle/PaddleOCR
+
+Modification notice (Apache License 2.0, section 4(b)): the file rec_v6_small/inference.onnx in this
+add-on is modified. Its last layer (MatMul + Add + Softmax over the whole dictionary) was rebuilt by
+tools/slim_head.py of this add-on (https://github.com/fdrv161/nvda-paddle-ocr) so that it returns only
+the characters the add-on allows, computing the same probabilities in parts of the dictionary.
+The other layers and all weights are unchanged. det_v6_tiny and rec_cyrillic_v5 are unchanged.
 Copyright (c) PaddlePaddle Authors. Licensed under the Apache License, Version 2.0 (text below).
 
                                  Apache License
