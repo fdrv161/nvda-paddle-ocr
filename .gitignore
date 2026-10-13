@@ -1,4 +1,4 @@
-﻿.env
+.env
 .env.*
 __pycache__/
 *.py[cod]
@@ -8,26 +8,13 @@ __pycache__/
 tmp/
 # Модели большие и скачиваются заново: tools/fetch_models.py (хэши в models/manifest.json)
 models/*/
-# Чужое дополнение, лежит только как пример
-OnnxASR/
 # Собранные пакеты
 *.nvda-addon
-build/
 # Локальные настройки Claude Code
 .claude/settings.local.json
 # Библиотеки и модели дополнения собираются tools/fetch_libs.py
 addon/globalPlugins/paddleOcr/lib/
 addon/globalPlugins/paddleOcr/models/
-# Портативная NVDA для проверки
-Nvda beta/
-# Скилл NVDA для Claude: лежит локально, в репозиторий не нужен
-SKILL.md
-SKILL-README.md
-planner.md
-agents/
-assets/
-references/
-scripts/
 # Свои скриншоты для замеров: только локально
 tests/screens/
 .chttoo/
