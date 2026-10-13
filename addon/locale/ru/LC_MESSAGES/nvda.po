@@ -48,6 +48,3 @@ msgid ""
 msgstr ""
 "Предыдущее распознавание не закончилось за {seconds} секунд, начинаю "
 "заново. Если зависнет снова, перезапустите NVDA"
-
-msgid "Paddle OCR is still busy with the previous recognition. Restart NVDA"
-msgstr "Paddle OCR всё ещё занят предыдущим распознаванием. Перезапустите NVDA"

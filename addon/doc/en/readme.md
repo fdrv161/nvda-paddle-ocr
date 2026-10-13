@@ -14,6 +14,8 @@ There are no default hotkeys to avoid conflicts with other add-ons. You can assi
 
 On the first recognition after starting NVDA, "Loading OCR models" will be announced. After that, the models remain in memory.
 
+If you press the recognition command again while recognition is still running, "Recognition in progress" will be announced and the running recognition continues. If recognition takes longer than 30 seconds, the next press starts it again. If it hangs again, restart NVDA.
+
 On my laptop (Ryzen 7 7840HS, 32 GB RAM, Windows 11 25H2), the entire screen is recognized in about 0.4 seconds, and small windows in fractions of a second. On weak hardware it may be slower.
 
 ## Languages and alphabets

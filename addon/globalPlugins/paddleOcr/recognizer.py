@@ -13,7 +13,6 @@ import time
 import addonHandler
 import config
 import languageHandler
-import queueHandler
 import ui
 from contentRecog import ContentRecognizer, LinesWordsResult
 from logHandler import log
@@ -165,12 +164,11 @@ class PaddleOcr(ContentRecognizer):
 	def _run(self, buf, imageInfo, onResult, token, lang):
 		# A previous recognition stuck in the model keeps the lock: do not wait for it forever.
 		if not _runLock.acquire(timeout=STUCK_AFTER):
-			log.error("Paddle OCR: the previous recognition still runs, a new one cannot start")
+			# recogUi itself logs the error and says "Recognition failed"; the advice to restart NVDA
+			# was already spoken by the command (see script_recognizeNavigatorObject) and is in the help.
 			if self._take(token):
-				# Translators: Spoken when a new recognition cannot start because the previous one hangs.
-				message = _("Paddle OCR is still busy with the previous recognition. Restart NVDA")
-				queueHandler.queueFunction(queueHandler.eventQueue, ui.message, message)
-				onResult(TimeoutError("Paddle OCR: the previous recognition does not finish"))
+				error = f"Paddle OCR: the previous recognition hangs over {STUCK_AFTER} s, restart NVDA"
+				onResult(TimeoutError(error))
 			return
 		try:
 			if self._current is not token:

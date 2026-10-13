@@ -273,7 +273,7 @@ class Reader:
 		score = float(np.mean([conf[t] for _char, t in chars]))
 		words = []
 		cur = []
-		for ch, t in chars + [(" ", steps)]:
+		for ch, t in [*chars, (" ", steps)]:
 			if ch == " ":
 				if cur:
 					cur = self._fix_mixed_script(cur, prob)
