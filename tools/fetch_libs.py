@@ -4,7 +4,8 @@ Run: .venv/Scripts/python tools/fetch_libs.py
 1. Downloads cp313 win_amd64 wheels (NVDA 2026.3 runs Python 3.13, while .venv may be newer)
    and unpacks them into addon/globalPlugins/paddleOcr/lib/.
 2. Copies the chosen models from models/ into addon/globalPlugins/paddleOcr/models/
-   (download them first: tools/fetch_models.py).
+   (download them first: tools/fetch_models.py). The Latin recognizer gets a slim head
+   on the way (slim_head.py, needs the onnx package).
 Running it again rebuilds the add-on lib/ and models/ from scratch.
 """
 
@@ -21,6 +22,9 @@ WHEELS = ROOT / "tmp" / "wheels"
 PACKAGES = ("onnxruntime==1.30.0", "numpy==2.5.3", "opencv-python-headless==5.0.0.93")
 MODELS = ("det_v6_tiny", "rec_cyrillic_v5", "rec_v6_small")
 MODEL_FILES = ("inference.onnx", "inference.yml")
+# Models with a large dictionary (18.7k characters) get a slim head, see slim_head.py.
+# The Cyrillic model has 852 characters: there the head is small anyway.
+SLIM_HEAD = ("rec_v6_small",)
 
 
 def fetch_wheels():
@@ -96,6 +100,9 @@ def unpack_wheels():
 
 
 def copy_models():
+	# Needs the onnx package, which only this step uses.
+	from slim_head import slim_head
+
 	dest = PLUGIN / "models"
 	if dest.exists():
 		shutil.rmtree(dest)
@@ -105,8 +112,11 @@ def copy_models():
 			src = ROOT / "models" / name / fname
 			if not src.exists():
 				raise SystemExit(f"Нет {src}. Сначала запустите tools/fetch_models.py")
-			shutil.copy2(src, dest / name / fname)
-		print(f"Скопирована модель: {name}")
+			if name in SLIM_HEAD and fname == "inference.onnx":
+				slim_head(src, dest / name / fname)
+			else:
+				shutil.copy2(src, dest / name / fname)
+		print(f"Скопирована модель: {name}" + (" (облегчённая голова)" if name in SLIM_HEAD else ""))
 
 
 def size_mb(path):

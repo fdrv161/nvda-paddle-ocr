@@ -27,6 +27,8 @@ sys.path.insert(0, str(ROOT / "addon" / "globalPlugins" / "paddleOcr"))
 import engine  # noqa: E402 (needs the sys.path line above)
 
 MODELS = ROOT / "models"
+# The modes use the models as they are in the add-on (the Latin recognizer has a slim head there).
+PLUGIN_MODELS = ROOT / "addon" / "globalPlugins" / "paddleOcr" / "models"
 # The same models and character masks as in recognizer._getEngine (NVDA in Russian for the Cyrillic mode).
 MODES = {
 	"en": ("Латиница", "det_v6_tiny", "rec_v6_small", engine.latinOnly),
@@ -104,16 +106,16 @@ def load_images(paths):
 	return images
 
 
-def run_one(label, det, rec, allowed, paths):
+def run_one(label, det, rec, allowed, paths, models=PLUGIN_MODELS):
 	"""One mode in the current process: load time, speed, memory now and at the peak."""
 	images = load_images(paths)
 	now, _peak = memory()
 	print(f"\n{label} ({det} + {rec}). Память до загрузки: {now:.0f} МБ")
 	t = time.perf_counter()
 	eng = engine.OcrEngine(
-		MODELS / det / "inference.onnx",
-		MODELS / rec / "inference.onnx",
-		MODELS / rec / "inference.yml",
+		models / det / "inference.onnx",
+		models / rec / "inference.onnx",
+		models / rec / "inference.yml",
 		allowed=allowed,
 	)
 	now, peak = memory()
@@ -145,7 +147,7 @@ def main():
 	args = parser.parse_args()
 	if args.models:
 		det, rec = args.models
-		run_one("Свои модели", det, rec, None, args.images)
+		run_one("Свои модели", det, rec, None, args.images, MODELS)
 		return 0
 	if args.one:
 		label, det, rec, allowed = MODES[args.one]

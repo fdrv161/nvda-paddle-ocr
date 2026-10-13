@@ -157,19 +157,27 @@ class Reader:
 
 	def __init__(self, recPath, recYml, threads=0, allowed=None):
 		self._rec = _session(recPath, threads)
-		self._recInput = self._rec.get_inputs()[0].name
+		inputs = self._rec.get_inputs()
+		self._recInput = inputs[0].name
+		# A model with a slim head (tools/slim_head.py) takes the indices of the columns to return.
+		self._keepInput = inputs[1].name if len(inputs) > 1 else None
 		# Index 0 is the CTC blank; the models also know a space at the end.
 		self._chars = ["", *_load_charset(recYml), " "]
 		classes = self._rec.get_outputs()[0].shape[-1]
+		if self._keepInput:
+			classes = int(self._rec.get_modelmeta().custom_metadata_map["classes"])
 		if isinstance(classes, int) and classes != len(self._chars):
 			raise ValueError(f"Dictionary ({len(self._chars)}) does not match the model ({classes})")
 		# Banned characters (allowed(c) is false) are never chosen when decoding.
 		# Keep only the allowed columns: the Latin mode keeps ~760 of 18.7k, so decoding
 		# is many times cheaper, and the chosen character is the same as with banned ones zeroed.
+		# A slim head returns only these columns itself, so the full 18.7k-wide output never exists.
 		self._keep = None
 		if allowed:
 			self._keep = np.array([i for i, c in enumerate(self._chars) if i == 0 or allowed(c)])
 			self._chars = [self._chars[i] for i in self._keep]
+		elif self._keepInput:
+			self._keep = np.arange(len(self._chars))
 		# Indices of Latin and Cyrillic letters in the dictionary, for fixing mixed-script words.
 		self._latin = np.array([i for i, c in enumerate(self._chars) if _script(c) == "latin"])
 		self._cyr = np.array([i for i, c in enumerate(self._chars) if _script(c) == "cyr"])
@@ -205,10 +213,11 @@ class Reader:
 				batch[j, :, :, :rw] = ((img / 255.0 - 0.5) / 0.5).transpose(2, 0, 1)
 				widths.append(rw)
 			last = n == 0
-			probs = self._rec.run(
-				None, {self._recInput: batch}, self._lastRunOpts if last else self._runOpts
-			)[0]
-			if self._keep is not None:
+			feeds = {self._recInput: batch}
+			if self._keepInput:
+				feeds[self._keepInput] = self._keep
+			probs = self._rec.run(None, feeds, self._lastRunOpts if last else self._runOpts)[0]
+			if self._keep is not None and not self._keepInput:
 				probs = probs[:, :, self._keep]
 			for j, i in enumerate(idx):
 				results[i] = self._ctc_words(probs[j], batchW, widths[j], boxes[i])

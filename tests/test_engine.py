@@ -114,6 +114,29 @@ def test_wide_lines(ocr):
 			assert x0 <= wd["x"] and wd["x"] + wd["width"] <= x1
 
 
+def test_slim_head():
+	# The add-on's Latin recognizer has a slim head (tools/slim_head.py): it must read exactly
+	# like the original model from models/, with the same confidence.
+	slim = MODELS / "rec_v6_small"
+	orig = ROOT / "models" / "rec_v6_small"
+	if not slim.is_dir() or not orig.is_dir():
+		pytest.skip("Needs rec_v6_small in the add-on and in models/")
+	readers = [
+		engine.Reader(d / "inference.onnx", d / "inference.yml", allowed=engine.latinOnly)
+		for d in (orig, slim)
+	]
+	assert readers[1]._keepInput and not readers[0]._keepInput
+	img = np.full((24, 1400, 3), 255, np.uint8)
+	cv2.putText(img, "Open file Settings Cancel 2026", (4, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
+	# Boxes of different widths: a batch of narrow ones and a wide one read alone.
+	boxes = [(0, 0, 1400, 24), (0, 0, 120, 24), (0, 0, 300, 24), (0, 0, 500, 24), (0, 0, 60, 24)]
+	(a, b) = (r.read(img, boxes) for r in readers)
+	for (wordsA, scoreA), (wordsB, scoreB) in zip(a, b, strict=True):
+		assert wordsA == wordsB
+		assert scoreA == pytest.approx(scoreB, abs=1e-4)
+	assert "Settings" in [wd["text"] for wd in a[0][0]]
+
+
 def test_latinOnly():
 	# Language "en": Latin with diacritics, punctuation and arrows are allowed;
 	# CJK, Greek and Cyrillic are not.

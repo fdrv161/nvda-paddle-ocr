@@ -37,7 +37,9 @@ jobs:
         run: python tools/fetch_models.py det_v6_tiny rec_v6_small rec_cyrillic_v5
 
       - name: Libraries
-        run: python tools/fetch_libs.py
+        run: |
+          python -m pip install --quiet onnx==1.23.2
+          python tools/fetch_libs.py
 
       - name: Tests
         run: |
