@@ -83,7 +83,7 @@ To release, set `version` in `addon/manifest.ini` and push a tag with the same v
 
 ## Third-party components
 
-The add-on's `lib/` and `models/` folders are not stored in git. `tools/fetch_libs.py` and `tools/fetch_models.py` download them from the official sources below, with pinned versions, so running these two scripts rebuilds the same folders. Files are copied unchanged; only parts not needed at runtime are left out: tests, C headers, onnxruntime tools, OpenCV data files and the OpenCV ffmpeg video library. Licenses of the libraries go into the package with them.
+The add-on's `lib/` and `models/` folders are not stored in git. `tools/fetch_libs.py` and `tools/fetch_models.py` download them from the official sources below, with pinned versions, so running these two scripts rebuilds the same folders. Files are copied unchanged; only parts not needed at runtime are left out: tests and test modules, type hints, C headers, NumPy's f2py, onnxruntime tools, OpenCV data files and the OpenCV ffmpeg video library. Licenses of the libraries go into the package with them.
 
 * **onnxruntime 1.30.0** (MIT), PyPI wheel `onnxruntime-1.30.0-cp313-cp313-win_amd64.whl`. Binaries: `onnxruntime.dll`, `onnxruntime_providers_shared.dll`, `onnxruntime_pybind11_state.pyd`. Licenses: `lib/onnxruntime/LICENSE`, `ThirdPartyNotices.txt`.
 * **NumPy 2.5.3** (BSD-3-Clause), PyPI wheel `numpy-2.5.3-cp313-cp313-win_amd64.whl`. Binaries: the `.pyd` modules of NumPy and, in `numpy.libs`, OpenBLAS (`libscipy_openblas64_*.dll`) and the Microsoft C++ runtime (`msvcp140-*.dll`) that NumPy ships. Licenses: `lib/licenses/numpy/`.

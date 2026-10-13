@@ -71,10 +71,11 @@ def unpack_wheels():
 					dest.write_bytes(z.read(item))
 		print(f"Распаковано: {found[0].name}")
 	# Tests, C headers and tools are not needed in the add-on.
+	# f2py and the PyInstaller hook are loaded by numpy only on demand, never by the engine.
 	for junk in (
-		"numpy/_core/tests",
-		"numpy/tests",
 		"numpy/_core/include",
+		"numpy/f2py",
+		"numpy/_pyinstaller",
 		"onnxruntime/tools",
 		"onnxruntime/transformers",
 		"onnxruntime/quantization",
@@ -82,6 +83,12 @@ def unpack_wheels():
 		"cv2/data",
 	):
 		shutil.rmtree(lib / junk, ignore_errors=True)
+	for d in [d for d in lib.rglob("tests") if d.is_dir()]:
+		shutil.rmtree(d, ignore_errors=True)
+	# Type hints for editors, numpy's pytest setup and its C test modules (used only by numpy's own tests).
+	for pattern in ("*.pyi", "py.typed", "numpy/conftest.py", "numpy/_core/_*_tests.*"):
+		for f in lib.glob(pattern if "/" in pattern else f"**/{pattern}"):
+			f.unlink()
 	# OpenCV needs ffmpeg only for video and loads it only when working with video; it is ~1/4 of cv2.
 	for f in (lib / "cv2").glob("opencv_videoio_ffmpeg*.dll"):
 		f.unlink()
