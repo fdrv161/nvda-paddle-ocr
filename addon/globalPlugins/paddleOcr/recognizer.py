@@ -29,24 +29,18 @@ LANGUAGES = {
 	"en": ("det_v6_tiny", "rec_v6_small"),
 	"ru": ("det_v6_tiny", "rec_cyrillic_v5"),
 }
-# NVDA languages written in Cyrillic: for them the Cyrillic mode is the default.
+# NVDA interface languages written in Cyrillic: for them the Cyrillic mode is the default.
+# Only languages NVDA has a translation for: for any other Windows language NVDA falls back to English.
+# Serbian is left out on purpose: NVDA's Serbian translation is in Latin script,
+# and the Cyrillic model cannot read š, č, ć, ž, đ.
 _CYRILLIC_NVDA = {
 	"ru",
 	"uk",
 	"be",
 	"bg",
-	"sr",
 	"mk",
-	"kk",
 	"ky",
-	"tg",
 	"mn",
-	"tt",
-	"ba",
-	"cv",
-	"sah",
-	"os",
-	"ce",
 }
 # With these NVDA languages only their letters are allowed (see engine.eastSlavicOnly).
 _EAST_SLAVIC_NVDA = {"ru", "uk", "be", "bg"}
@@ -101,8 +95,9 @@ def _getEngine(lang):
 		det, rec = LANGUAGES[lang]
 		if lang == "en":
 			allowed = engine.latinOnly
-		elif _nvdaLanguage() in _CYRILLIC_NVDA - _EAST_SLAVIC_NVDA:
-			# NVDA in Kazakh, Serbian, etc.: the letters of that language are needed.
+		elif _nvdaLanguage() in _CYRILLIC_NVDA - _EAST_SLAVIC_NVDA or _nvdaLanguage() == "sr":
+			# NVDA in Macedonian, Serbian, etc.: the letters of that language are needed.
+			# Serbian is not in _CYRILLIC_NVDA, but those who switch to Cyrillic by hand need its letters.
 			allowed = engine.anyCyrillic
 		else:
 			allowed = engine.eastSlavicOnly
