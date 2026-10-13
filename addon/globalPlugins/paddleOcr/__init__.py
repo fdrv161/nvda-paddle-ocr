@@ -100,6 +100,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 		if self._recognizer is None:
 			self._recognizer = PaddleOcr()
+		elif self._recognizer.busy:
+			# Pressing the command again while recognizing would cancel the running recognition
+			# and queue a new one; keep the running one instead.
+			# Translators: Spoken when the recognition command is pressed while a recognition is running.
+			ui.message(_("Recognition in progress"))
+			return
 		# From here on everything is as with Windows OCR:
 		# capture (also with Screen Curtain), result window, clicking words.
 		recogUi.recognizeNavigatorObject(self._recognizer)

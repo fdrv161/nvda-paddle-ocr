@@ -38,3 +38,6 @@ msgstr "Кириллица"
 
 msgid "Loading OCR models"
 msgstr "Загрузка моделей OCR"
+
+msgid "Recognition in progress"
+msgstr "Распознавание уже идёт"

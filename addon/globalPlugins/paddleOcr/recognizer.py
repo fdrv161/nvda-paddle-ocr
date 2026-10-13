@@ -128,6 +128,11 @@ class PaddleOcr(ContentRecognizer):
 		# Checking and clearing the tag must not interleave with a new request setting it.
 		self._tokenLock = threading.Lock()
 
+	@property
+	def busy(self):
+		"""A recognition was asked and its result has not been delivered or cancelled yet."""
+		return self._current is not None
+
 	def getResizeFactor(self, width, height):
 		# The engine picks the scale itself and returns coordinates in capture pixels.
 		return 1
