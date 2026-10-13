@@ -184,6 +184,30 @@ def test_wide_lines(ocr):
 			assert x0 <= wd["x"] and wd["x"] + wd["width"] <= x1
 
 
+def test_batch_width(ocr):
+	# A batch of lines stays within REC_BATCH_WIDTH pixels (memory of a run grows with it);
+	# only a single line may be wider. Every line is read once.
+	reader = ocr._rec
+	session = reader._rec
+	shapes = []
+
+	class Recording:
+		def run(self, names, feeds, opts):
+			shapes.append(feeds[reader._recInput].shape)
+			return session.run(names, feeds, opts)
+
+	img = np.full((20, 2600, 3), 255, np.uint8)
+	boxes = [(0, 0, w, 20) for w in (60, 300, 900, 1200, 1300, 1500, 2600, 120, 2500)]
+	reader._rec = Recording()
+	try:
+		assert len(reader.read(img, boxes)) == len(boxes)
+	finally:
+		reader._rec = session
+	assert sum(n for n, _c, _h, _w in shapes) == len(boxes)
+	for n, _c, _h, w in shapes:
+		assert n == 1 or n * w <= engine.REC_BATCH_WIDTH
+
+
 def test_slim_head():
 	# The add-on's Latin recognizer has a slim head (tools/slim_head.py): it must read exactly
 	# like the original model from models/, with the same confidence.

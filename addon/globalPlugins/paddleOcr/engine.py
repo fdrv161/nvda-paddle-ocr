@@ -42,16 +42,13 @@ REC_HEIGHT = 48
 # Measured: batches of 4–8 are fastest; larger ones are slower (more width padding).
 REC_BATCH = 4
 # Memory of one run grows with batch × width (and × dictionary size, 18k characters in the Latin mode,
-# without a slim head: tools/slim_head.py). Lines wider than REC_WIDE_RATIO heights (a full-width line)
-# are read one at a time, and lines wider than REC_MAX_RATIO heights (not text: separators) are squeezed
-# to that width. This keeps one run under ~150 MB.
-REC_WIDE_RATIO = 80
+# without a slim head: tools/slim_head.py). So a batch is at most REC_BATCH_WIDTH pixels wide in total
+# (lines of the 48 px input; a full-width 1080p line is ~4500): long lines go two or one at a time.
+# Measured on a full-width console: peak 430 → 290 MB, the Cyrillic mode 18% faster (less padding),
+# other screens the same. Lines wider than REC_MAX_RATIO heights (not text: separators) are squeezed
+# to that width.
+REC_BATCH_WIDTH = 6000
 REC_MAX_RATIO = 320
-# A run at least this wide (batch × width in pixels of the 48 px input; a full-width 1080p line is ~4500)
-# returns its memory to the system right away. Otherwise onnxruntime keeps it and on the next recognition
-# grows its pool in even larger steps: measured on a full-width console, peak 540 → 380 MB.
-# Narrower runs keep their memory until the last one, as returning it after each run is slower.
-REC_SHRINK_WIDTH = 6000
 # Lines the recognizer is unsure about (usually icons and borders) are dropped.
 REC_MIN_SCORE = 0.5
 # Pieces at the same height separated by more than this many line heights are separate lines (columns).
@@ -209,10 +206,10 @@ class Reader:
 		# Indices of Latin and Cyrillic letters in the dictionary, for fixing mixed-script words.
 		self._latin = np.array([i for i, c in enumerate(self._chars) if _script(c) == "latin"])
 		self._cyr = np.array([i for i, c in enumerate(self._chars) if _script(c) == "cyr"])
-		# Return memory to the system only after the last batch of lines and after very wide ones:
-		# after each batch, onnxruntime would allocate it again for the next one, and a screen has ~25.
+		# Return memory to the system only after the last batch of lines: after each batch,
+		# onnxruntime would allocate it again for the next one, and a screen has ~25 batches.
 		self._runOpts = ort.RunOptions()
-		self._shrinkRunOpts = _run_options()
+		self._lastRunOpts = _run_options()
 
 	def read(self, bgr, boxes):
 		"""For each box: (words, confidence); there may be no words."""
@@ -222,7 +219,12 @@ class Reader:
 		order = sorted(range(len(crops)), key=lambda i: ratio[i])
 		batches = []
 		for i in order:
-			if ratio[i] > REC_WIDE_RATIO or not batches or len(batches[-1]) == REC_BATCH:
+			# The lines go from narrow to wide, so the new line sets the batch width.
+			if (
+				not batches
+				or len(batches[-1]) == REC_BATCH
+				or (len(batches[-1]) + 1) * math.ceil(REC_HEIGHT * ratio[i]) > REC_BATCH_WIDTH
+			):
 				batches.append([i])
 			else:
 				batches[-1].append(i)
@@ -240,9 +242,9 @@ class Reader:
 				img = cv2.resize(crops[i], (rw, REC_HEIGHT)).astype(np.float32)
 				batch[j, :, :, :rw] = ((img / 255.0 - 0.5) / 0.5).transpose(2, 0, 1)
 				widths.append(rw)
-			shrink = n == 0 or batchW * len(idx) >= REC_SHRINK_WIDTH
+			last = n == 0
 			feeds = {self._recInput: batch, **self._keepFeeds}
-			probs = self._rec.run(None, feeds, self._shrinkRunOpts if shrink else self._runOpts)[0]
+			probs = self._rec.run(None, feeds, self._lastRunOpts if last else self._runOpts)[0]
 			if self._keep is not None and not self._keepFeeds:
 				probs = probs[:, :, self._keep]
 			for j, i in enumerate(idx):
