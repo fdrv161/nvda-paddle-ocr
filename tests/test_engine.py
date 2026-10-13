@@ -195,7 +195,7 @@ def test_slim_head():
 		engine.Reader(d / "inference.onnx", d / "inference.yml", allowed=engine.latinOnly)
 		for d in (orig, slim)
 	]
-	assert readers[1]._keepInput and not readers[0]._keepInput
+	assert readers[1]._keepFeeds and not readers[0]._keepFeeds
 	img = np.full((24, 1400, 3), 255, np.uint8)
 	cv2.putText(img, "Open file Settings Cancel 2026", (4, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
 	# Boxes of different widths: a batch of narrow ones and a wide one read alone.

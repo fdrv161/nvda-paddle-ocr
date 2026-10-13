@@ -31,12 +31,13 @@ DET_MAX_SIDE = 4000
 # Larger images are left as they are: there a margin only shuffles the result.
 DET_PAD = 16
 DET_PAD_BELOW = 100
-# The detector's working memory grows with the image area (~180 MB for a 1080p screen), so tall images
-# go through it in horizontal strips of about DET_STRIP rows. Each strip also takes DET_OVERLAP rows
-# of its neighbours on both sides: more than half of the tallest screen line, so a line is whole
-# in the strip that owns its centre.
+# The detector's working memory grows with the image area (~180 MB for a 1080p screen, ~680 MB for 4K),
+# so tall images go through it in horizontal strips of about DET_STRIP rows. Each strip also takes
+# DET_OVERLAP rows of its neighbours on both sides, so a line up to twice that tall is whole in at least
+# one strip (see _join_strips). Measured on 1080p: detector peak 120 → 32 MB, time +6%;
+# an overlap of 64 costs +18% with the same accuracy.
 DET_STRIP = 384
-DET_OVERLAP = 64
+DET_OVERLAP = 32
 REC_HEIGHT = 48
 # Measured: batches of 4–8 are fastest; larger ones are slower (more width padding).
 REC_BATCH = 4
@@ -175,13 +176,14 @@ class Reader:
 		self._rec = _session(recPath, threads)
 		inputs = self._rec.get_inputs()
 		self._recInput = inputs[0].name
-		# A model with a slim head (tools/slim_head.py) takes the indices of the columns to return.
-		self._keepInput = inputs[1].name if len(inputs) > 1 else None
+		# A model with a slim head (tools/slim_head.py) returns only the columns given in its other inputs.
+		slim = len(inputs) > 1
 		# Index 0 is the CTC blank; the models also know a space at the end.
 		self._chars = ["", *_load_charset(recYml), " "]
 		classes = self._rec.get_outputs()[0].shape[-1]
-		if self._keepInput:
-			classes = int(self._rec.get_modelmeta().custom_metadata_map["classes"])
+		if slim:
+			meta = self._rec.get_modelmeta().custom_metadata_map
+			classes = int(meta["classes"])
 		if isinstance(classes, int) and classes != len(self._chars):
 			raise ValueError(f"Dictionary ({len(self._chars)}) does not match the model ({classes})")
 		# Banned characters (allowed(c) is false) are never chosen when decoding.
@@ -192,8 +194,18 @@ class Reader:
 		if allowed:
 			self._keep = np.array([i for i, c in enumerate(self._chars) if i == 0 or allowed(c)])
 			self._chars = [self._chars[i] for i in self._keep]
-		elif self._keepInput:
-			self._keep = np.arange(len(self._chars))
+		# For a slim head: the kept columns split among its inputs keep0, keep1, ... (one per slice
+		# of the dictionary), numbered from the slice start. The output then has them in order.
+		self._keepFeeds = {}
+		if slim:
+			keep = self._keep if self._keep is not None else np.arange(classes)
+			step = int(meta["slice"])
+			self._keepFeeds = {
+				f"keep{i}": keep[(keep >= start) & (keep < start + step)] - start
+				for i, start in enumerate(range(0, classes, step))
+			}
+			if set(self._keepFeeds) != {inp.name for inp in inputs[1:]}:
+				raise ValueError(f"Unknown slim head inputs in {recPath}")
 		# Indices of Latin and Cyrillic letters in the dictionary, for fixing mixed-script words.
 		self._latin = np.array([i for i, c in enumerate(self._chars) if _script(c) == "latin"])
 		self._cyr = np.array([i for i, c in enumerate(self._chars) if _script(c) == "cyr"])
@@ -229,11 +241,9 @@ class Reader:
 				batch[j, :, :, :rw] = ((img / 255.0 - 0.5) / 0.5).transpose(2, 0, 1)
 				widths.append(rw)
 			shrink = n == 0 or batchW * len(idx) >= REC_SHRINK_WIDTH
-			feeds = {self._recInput: batch}
-			if self._keepInput:
-				feeds[self._keepInput] = self._keep
+			feeds = {self._recInput: batch, **self._keepFeeds}
 			probs = self._rec.run(None, feeds, self._shrinkRunOpts if shrink else self._runOpts)[0]
-			if self._keep is not None and not self._keepInput:
+			if self._keep is not None and not self._keepFeeds:
 				probs = probs[:, :, self._keep]
 			for j, i in enumerate(idx):
 				results[i] = self._ctc_words(probs[j], batchW, widths[j], boxes[i])
