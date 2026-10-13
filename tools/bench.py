@@ -24,7 +24,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "addon" / "globalPlugins" / "paddleOcr"))
-import engine
+import engine  # noqa: E402 (needs the sys.path line above)
 
 MODELS = ROOT / "models"
 # The same models and character masks as in recognizer._getEngine (NVDA in Russian for the Cyrillic mode).
@@ -68,7 +68,8 @@ def memory():
 
 def synthetic():
 	img = np.full((1080, 1920, 3), 255, np.uint8)
-	words = ["File", "Edit", "View", "Settings", "Help", "Open", "Save", "Close", "Window", "Tools", "Search", "Options"]
+	words = ["File", "Edit", "View", "Settings", "Help", "Open", "Save", "Close"]
+	words += ["Window", "Tools", "Search", "Options"]
 	rng = np.random.default_rng(0)
 	for row in range(40):
 		x = 10

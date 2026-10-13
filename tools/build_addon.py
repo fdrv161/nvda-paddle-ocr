@@ -32,7 +32,7 @@ def md_to_html(path):
 def parse_po(path):
 	"""Simple .po parser: msgid/msgstr, quoted continuation lines. Empty translations are skipped."""
 	entries, key, cur = {}, None, {}
-	for line in path.read_text(encoding="utf-8").splitlines() + [""]:
+	for line in [*path.read_text(encoding="utf-8").splitlines(), ""]:
 		line = line.strip()
 		m = re.match(r'(msgid|msgstr)\s+(".*")$', line)
 		if m:

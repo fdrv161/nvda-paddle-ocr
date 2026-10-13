@@ -61,7 +61,8 @@ def unpack_wheels():
 		if not found:
 			raise SystemExit(f"Не найдено колесо {pattern} в {WHEELS}")
 		with zipfile.ZipFile(found[0]) as z:
-			# .dist-info folders are not needed at runtime; keep only the licenses from them (numpy has them only there).
+			# .dist-info folders are not needed at runtime; keep only the licenses from them
+			# (numpy has them only there).
 			for item in z.namelist():
 				if ".dist-info/" not in item:
 					z.extract(item, lib)

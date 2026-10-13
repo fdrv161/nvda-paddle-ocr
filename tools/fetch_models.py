@@ -75,7 +75,8 @@ def main(names):
 			if not dest.exists():
 				download(f"https://huggingface.co/{repo}/resolve/main/{fname}", dest)
 			entry["files"][fname] = {"size": dest.stat().st_size, "sha256": sha256(dest)}
-			# The model on Hugging Face may have been replaced: then stop rather than silently build with another model.
+			# The model on Hugging Face may have been replaced:
+			# then stop rather than silently build with another model.
 			known = manifest.get(name, {}).get("files", {}).get(fname, {}).get("sha256")
 			if known and known != entry["files"][fname]["sha256"]:
 				print(

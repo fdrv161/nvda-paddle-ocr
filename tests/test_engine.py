@@ -13,7 +13,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 PLUGIN = ROOT / "addon" / "globalPlugins" / "paddleOcr"
 sys.path.insert(0, str(PLUGIN))
-import engine
+import engine  # noqa: E402 (needs the sys.path line above)
 
 MODELS = PLUGIN / "models"
 
@@ -98,8 +98,8 @@ def test_small_object(ocr, text):
 	assert " ".join(wd["text"] for wd in words) == text
 	h, w = img.shape[:2]
 	for wd in words:
-		assert 0 <= wd["x"] and wd["x"] + wd["width"] <= w
-		assert 0 <= wd["y"] and wd["y"] + wd["height"] <= h
+		assert wd["x"] >= 0 and wd["x"] + wd["width"] <= w
+		assert wd["y"] >= 0 and wd["y"] + wd["height"] <= h
 
 
 def test_wide_lines(ocr):
@@ -115,7 +115,8 @@ def test_wide_lines(ocr):
 
 
 def test_latinOnly():
-	# Language "en": Latin with diacritics, punctuation and arrows are allowed; CJK, Greek and Cyrillic are not.
+	# Language "en": Latin with diacritics, punctuation and arrows are allowed;
+	# CJK, Greek and Cyrillic are not.
 	assert all(engine.latinOnly(c) for c in "Aé9+…→")
 	assert not any(engine.latinOnly(c) for c in "平γП∏")
 
@@ -159,8 +160,11 @@ def test_fix_il(raw, fixed):
 
 
 def test_pick_twin_script():
-	# "Сору" among English words → Latin; "Bce" among Russian ones → Cyrillic; unclear with no neighbours → by screen.
-	w = lambda text, alt=None: {"text": text, **({"alt": alt} if alt else {})}
+	# "Сору" among English words → Latin; "Bce" among Russian ones → Cyrillic;
+	# unclear with no neighbours → by screen.
+	def w(text, alt=None):
+		return {"text": text, **({"alt": alt} if alt else {})}
+
 	items = [
 		[w("Сору", "Copy"), w("Paste")],
 		[w("Bce", "Все"), w("программы")],

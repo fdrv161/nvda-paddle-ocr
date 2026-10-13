@@ -23,7 +23,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "addon" / "globalPlugins" / "paddleOcr"))
-import engine
+import engine  # noqa: E402 (needs the sys.path line above)
 
 MODELS = ROOT / "addon" / "globalPlugins" / "paddleOcr" / "models"
 FONTS = ["segoeui.ttf", "tahoma.ttf", "arial.ttf", "verdana.ttf"]
@@ -51,9 +51,8 @@ Snap to Grid|Zoom In|Zoom Out|Import MIDI File|Project Name: Untitled_01|Audio E
 CPU 12% Disk 3%|Inbox (24)|Search messages|Mark all as read|Archive|Account Settings|All
 Notifications|Dark Mode|Language: English|Keyboard Shortcuts|Help Center|Report a Problem
 Visit www.example.com for details|support@example.com|Illegal file name|Fill level 100%
-Allow all cookies|Install Illustrator|Copy|Paste|Type|Export Copy|Bells and Vibes|Pads + Strings|Electronic Mayhem""".replace(
-	"\n", "|"
-).split("|")
+Allow all cookies|Install Illustrator|Copy|Paste|Type
+Export Copy|Bells and Vibes|Pads + Strings|Electronic Mayhem""".replace("\n", "|").split("|")
 
 RU = """Файл|Правка|Вид|Настройки|Открыть недавние файлы|Сохранить как...|Проверить обновления
 Параметры звука|Устройство вывода: Динамики|Частота дискретизации 48000 Гц|Громкость 75%
@@ -63,11 +62,11 @@ RU = """Файл|Правка|Вид|Настройки|Открыть неда�
 Дата изменения: 09.10.2026 14:32|Загрузка завершена|Сообщения|Отметить все как прочитанные
 Входящие (24)|Поиск по сообщениям|Уведомления|Тёмная тема|Язык интерфейса: русский
 Сочетания клавиш|Справка и поддержка|Сообщить о проблеме|Свободно 12,4 ГБ из 256 ГБ
-Копирование файлов: осталось 3 минуты|Ещё|Разрешить доступ к микрофону|Все программы
+Копирование файлов: осталось 3 минуты|Ещё|Разрешить доступ к микрофону
+Все программы
 Папка «Документы»|Щёлкните, чтобы продолжить|Объём памяти|Съёмка, вьюга, жёлтый хвощ
-Вы уверены, что хотите выйти?|Сохранить изменения перед закрытием?|Новая вкладка|Все|Сохранить все|Все закладки""".replace(
-	"\n", "|"
-).split("|")
+Вы уверены, что хотите выйти?|Сохранить изменения перед закрытием?
+Новая вкладка|Все|Сохранить все|Все закладки""".replace("\n", "|").split("|")
 
 MIXED = """Открыть в Visual Studio Code|Плагин Omnisphere 2.8|Версия NVDA 2026.3|Скачать Firefox
 Настройки Wi-Fi|Файл README.md|Нажмите Ctrl+C, чтобы скопировать|Подключено: Bluetooth Headphones
@@ -88,7 +87,7 @@ def make_screens():
 			y = 15
 			i = 0
 			while y < 800 - size * 2:
-				lang = rng.choices([l for l, _ in langs], [p for _, p in langs])[0]
+				lang = rng.choices([name for name, _ in langs], [p for _, p in langs])[0]
 				text = rng.choice({"en": EN, "ru": RU, "mix": MIXED}[lang])
 				font = ImageFont.truetype(f"C:/Windows/Fonts/{FONTS[(col + i) % len(FONTS)]}", size)
 				draw.text((x, y), text, font=font, fill=fg)
@@ -162,22 +161,21 @@ def main():
 		hyps, extra = match(lines, truth)
 		totalExtra += extra
 		theme, size = name.rsplit(", ", 1)
-		for (_, _, _, _, text, lang), hyp in zip(truth, hyps):
+		for (_, _, _, _, text, lang), hyp in zip(truth, hyps, strict=True):
 			# An ellipsis as one character reads the same, it is not an error.
 			e = levenshtein(hyp.replace("…", "..."), text)
 			for key in ("всё", f"язык {lang}", f"тема {theme}", f"размер {size}"):
 				errs[key] = errs.get(key, 0) + e
 				lens[key] = lens.get(key, 0) + len(text)
 			rows.append((e / len(text), text, hyp, name))
-	print(
-		f"Модели {args.det} + {args.rec}{', только латиница' if args.latin else ''}, настройки: {' '.join(args.set) or 'обычные'}"
-	)
+	latin = ", только латиница" if args.latin else ""
+	print(f"Модели {args.det} + {args.rec}{latin}, настройки: {' '.join(args.set) or 'обычные'}")
 	print(f"Картинок {len(screens)}, строк {len(rows)}, среднее время {statistics.mean(times):.2f} с")
 	for key in errs:
 		print(f"{key}: ошибок {100 * errs[key] / lens[key]:.2f}%")
 	perfect = sum(1 for r in rows if r[0] == 0)
 	print(f"Строк без единой ошибки: {perfect} из {len(rows)}; лишних слов вне строк: {totalExtra}")
-	for r, text, hyp, name in sorted(rows, reverse=True)[: args.show]:
+	for _score, text, hyp, name in sorted(rows, reverse=True)[: args.show]:
 		print(f"[{name}] надо «{text}», получено «{hyp}»")
 
 
