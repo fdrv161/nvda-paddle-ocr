@@ -1,5 +1,7 @@
 # Paddle OCR for NVDA
 
+Screen OCR for the NVDA screen reader with local PaddleOCR models. Help in Russian: [addon/doc/ru/readme.md](addon/doc/ru/readme.md) (Справка на русском).
+
 ## About the add-on
 
 Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R) for NVDA 2026.3 and newer. The add-on uses compact PaddleOCR recognition models from Baidu that run locally. This engine usually reads more accurately, especially small fonts, text on dark backgrounds, and non-standard interfaces such as VST plugins. The result window and screen curtain behavior are the same as with Windows OCR.
@@ -8,17 +10,19 @@ Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R) for NVDA 2026.
 
 1. Open the [latest release](../../releases/latest) (always the current version) and download the `paddleOcr-x.y.z.nvda-addon` file.
 2. Open it, confirm the installation and restart NVDA.
-3. Assign gestures to the commands, see below.
+3. Assign gestures to the commands, see [Commands and controls](#commands-and-controls).
 
 ## Commands and controls
 
 There are no default hotkeys to avoid conflicts with other add-ons. You can assign them in the NVDA menu: Preferences, Input Gestures, "Paddle OCR" category.
 
-* **Recognizes the content of the current navigator object with Paddle OCR.** Opens the result window: arrows move through the text, Enter clicks on the word, Escape closes the window.
+* **Recognizes the content of the current navigator object with Paddle OCR.** Opens the result window: arrows move through the text, Enter clicks the word at the cursor, Escape closes the window.
 * **Cycles the Paddle OCR recognition mode:** Latin or Cyrillic.
 * **Shows the Paddle OCR settings.**
 
 On the first recognition after starting NVDA, "Loading OCR models" will be announced. After that, the models remain in memory.
+
+If you press the recognition command again while recognition is still running, "Recognition in progress" will be announced and the running recognition continues. If recognition takes longer than 30 seconds, the next press starts it again. If it hangs again, restart NVDA.
 
 On my laptop (Ryzen 7 7840HS, 32 GB RAM, Windows 11 25H2), the entire screen is recognized in about 0.4 seconds, and small windows in fractions of a second. On weak hardware it may be slower.
 
@@ -43,7 +47,7 @@ NVDA menu: Preferences, Settings, "Paddle OCR" category.
 
 ## Privacy
 
-The add-on does not connect to the internet, does not send anything anywhere, and does not save either screenshots or recognized text to disk. Only its settings are stored in the NVDA config. Only error messages go into the NVDA log, and at the "debug" log level, also the image size and the time it took for OCR to occur.
+The add-on does not connect to the internet, does not send anything anywhere, and does not save either screenshots or recognized text to disk. Only its settings are stored in the NVDA configuration. Only error messages go into the NVDA log, and at the "debug" log level, also the image size and how long recognition took.
 
 ## Limitations and nuances
 
@@ -93,7 +97,19 @@ python -m venv .venv
 .venv/Scripts/python tools/build_addon.py
 ```
 
-To release, set `version` in `addon/manifest.ini` and push a tag with the same version, for example `v1.1.0`. GitHub Actions runs the tests, builds the add-on and publishes the release.
+The add-on appears in the repository root as `paddleOcr-<version>.nvda-addon`. Tests (they need the models downloaded above):
+
+```bash
+.venv/Scripts/python -m pytest tests -q
+```
+
+### Releasing
+
+1. Raise `version` in `addon/manifest.ini` and describe the changes in its `changelog` field: it becomes the release text.
+2. Push a tag with the same version, for example `v1.1.0`.
+3. GitHub Actions checks that the tag matches the version, runs the tests, builds the add-on and publishes the release.
+
+Pushing to `main` without a tag publishes nothing.
 
 ### Third-party components
 

@@ -8,7 +8,7 @@ Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R) for NVDA 2026.
 
 There are no default hotkeys to avoid conflicts with other add-ons. You can assign them in the NVDA menu: Preferences, Input Gestures, "Paddle OCR" category.
 
-* **Recognizes the content of the current navigator object with Paddle OCR.** Opens the result window: arrows move through the text, Enter clicks on the word, Escape closes the window.
+* **Recognizes the content of the current navigator object with Paddle OCR.** Opens the result window: arrows move through the text, Enter clicks the word at the cursor, Escape closes the window.
 * **Cycles the Paddle OCR recognition mode:** Latin or Cyrillic.
 * **Shows the Paddle OCR settings.**
 
@@ -39,7 +39,7 @@ NVDA menu: Preferences, Settings, "Paddle OCR" category.
 
 ## Privacy
 
-The add-on does not connect to the internet, does not send anything anywhere, and does not save either screenshots or recognized text to disk. Only its settings are stored in the NVDA config. Only error messages go into the NVDA log, and at the "debug" log level, also the image size and the time it took for OCR to occur.
+The add-on does not connect to the internet, does not send anything anywhere, and does not save either screenshots or recognized text to disk. Only its settings are stored in the NVDA configuration. Only error messages go into the NVDA log, and at the "debug" log level, also the image size and how long recognition took.
 
 ## Limitations and nuances
 
