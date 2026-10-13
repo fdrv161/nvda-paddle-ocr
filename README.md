@@ -1,6 +1,6 @@
 # Paddle OCR for NVDA
 
-Screen OCR for the NVDA screen reader with local PaddleOCR models. Help in Russian: [addon/doc/ru/readme.md](addon/doc/ru/readme.md) (Справка на русском).
+Screen OCR for the NVDA screen reader with local PaddleOCR models.
 
 ## About the add-on
 
