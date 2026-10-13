@@ -31,15 +31,26 @@ DET_MAX_SIDE = 4000
 # Larger images are left as they are: there a margin only shuffles the result.
 DET_PAD = 16
 DET_PAD_BELOW = 100
+# The detector's working memory grows with the image area (~180 MB for a 1080p screen), so tall images
+# go through it in horizontal strips of about DET_STRIP rows. Each strip also takes DET_OVERLAP rows
+# of its neighbours on both sides: more than half of the tallest screen line, so a line is whole
+# in the strip that owns its centre.
+DET_STRIP = 384
+DET_OVERLAP = 64
 REC_HEIGHT = 48
 # Measured: batches of 4–8 are fastest; larger ones are slower (more width padding).
 REC_BATCH = 4
-# Memory of one run grows with batch × width × dictionary size (18k characters in the Latin mode).
-# Lines wider than REC_WIDE_RATIO heights (rare: a full-width 4K line) are read one at a time,
-# and lines wider than REC_MAX_RATIO heights (not text: separators) are squeezed to that width.
-# This keeps one run under ~150 MB.
+# Memory of one run grows with batch × width (and × dictionary size, 18k characters in the Latin mode,
+# without a slim head: tools/slim_head.py). Lines wider than REC_WIDE_RATIO heights (a full-width line)
+# are read one at a time, and lines wider than REC_MAX_RATIO heights (not text: separators) are squeezed
+# to that width. This keeps one run under ~150 MB.
 REC_WIDE_RATIO = 80
 REC_MAX_RATIO = 320
+# A run at least this wide (batch × width in pixels of the 48 px input; a full-width 1080p line is ~4500)
+# returns its memory to the system right away. Otherwise onnxruntime keeps it and on the next recognition
+# grows its pool in even larger steps: measured on a full-width console, peak 540 → 380 MB.
+# Narrower runs keep their memory until the last one, as returning it after each run is slower.
+REC_SHRINK_WIDTH = 6000
 # Lines the recognizer is unsure about (usually icons and borders) are dropped.
 REC_MIN_SCORE = 0.5
 # Pieces at the same height separated by more than this many line heights are separate lines (columns).
@@ -142,14 +153,19 @@ class OcrEngine:
 		rh = max(32, round(h * scale / 32) * 32)
 		rw = max(32, round(w * scale / 32) * 32)
 		img = cv2.resize(bgr, (rw, rh)) if (rw, rh) != (w, h) else bgr
-		# (pixel/255 - mean)/std per channel straight into the 1×3×h×w layout: no intermediate float
-		# copies of the whole image, which is noticeable on a 1080p screen.
-		x = np.empty((1, 3, rh, rw), dtype=np.float32)
-		for c in range(3):
-			np.multiply(img[:, :, c], _DET_SCALE[c], out=x[0, c], dtype=np.float32)
-			x[0, c] -= _DET_SHIFT[c]
-		pred = self._det.run(None, {self._detInput: x})[0][0, 0]
-		return _db_boxes(pred, w / rw, h / rh, w, h)
+		sy = h / rh
+		parts = []
+		for top, bottom, s0, s1 in _strips(rh):
+			# (pixel/255 - mean)/std per channel straight into the 1×3×h×w layout: no intermediate float
+			# copies of the whole image, which is noticeable on a 1080p screen.
+			x = np.empty((1, 3, s1 - s0, rw), dtype=np.float32)
+			for c in range(3):
+				np.multiply(img[s0:s1, :, c], _DET_SCALE[c], out=x[0, c], dtype=np.float32)
+				x[0, c] -= _DET_SHIFT[c]
+			pred = self._det.run(None, {self._detInput: x})[0][0, 0]
+			del x
+			parts.append((top * sy, bottom * sy, s0 * sy, s1 * sy, _db_boxes(pred, w / rw, sy, w, h, s0)))
+		return _join_strips(parts, DET_OVERLAP / 2 * sy)
 
 
 class Reader:
@@ -181,10 +197,10 @@ class Reader:
 		# Indices of Latin and Cyrillic letters in the dictionary, for fixing mixed-script words.
 		self._latin = np.array([i for i, c in enumerate(self._chars) if _script(c) == "latin"])
 		self._cyr = np.array([i for i, c in enumerate(self._chars) if _script(c) == "cyr"])
-		# Return memory to the system only after the last batch of lines: after each batch,
-		# onnxruntime would allocate it again for the next one, and a screen has ~25 batches.
+		# Return memory to the system only after the last batch of lines and after very wide ones:
+		# after each batch, onnxruntime would allocate it again for the next one, and a screen has ~25.
 		self._runOpts = ort.RunOptions()
-		self._lastRunOpts = _run_options()
+		self._shrinkRunOpts = _run_options()
 
 	def read(self, bgr, boxes):
 		"""For each box: (words, confidence); there may be no words."""
@@ -212,11 +228,11 @@ class Reader:
 				img = cv2.resize(crops[i], (rw, REC_HEIGHT)).astype(np.float32)
 				batch[j, :, :, :rw] = ((img / 255.0 - 0.5) / 0.5).transpose(2, 0, 1)
 				widths.append(rw)
-			last = n == 0
+			shrink = n == 0 or batchW * len(idx) >= REC_SHRINK_WIDTH
 			feeds = {self._recInput: batch}
 			if self._keepInput:
 				feeds[self._keepInput] = self._keep
-			probs = self._rec.run(None, feeds, self._lastRunOpts if last else self._runOpts)[0]
+			probs = self._rec.run(None, feeds, self._shrinkRunOpts if shrink else self._runOpts)[0]
 			if self._keep is not None and not self._keepInput:
 				probs = probs[:, :, self._keep]
 			for j, i in enumerate(idx):
@@ -480,8 +496,83 @@ def _add_margin(bgr, pad):
 	return cv2.copyMakeBorder(bgr, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=color)
 
 
-def _db_boxes(pred, sx, sy, w, h):
-	"""Detector probability map → line rectangles (x0, y0, x1, y1) in pixels of the original image."""
+def _strips(rows):
+	"""Strips of the detector input: (own top, own bottom, top, bottom) in rows, multiples of 32.
+
+	The own parts cover the image without gaps; a strip runs DET_OVERLAP rows past them on both sides.
+	"""
+	n = max(1, round(rows / DET_STRIP))
+	cuts = [round(k * rows / n / 32) * 32 for k in range(n)] + [rows]
+	return [(a, b, max(0, a - DET_OVERLAP), min(rows, b + DET_OVERLAP)) for a, b in itertools.pairwise(cuts)]
+
+
+def _join_strips(parts, margin):
+	"""Boxes of the detector strips → one list with each line once.
+
+	parts: (own top, own bottom, top, bottom, boxes) per strip, in image pixels. A line near a cut is found
+	by both strips, and they may disagree: one of them cuts the line at its edge, splits it into other
+	pieces or puts its centre a pixel apart (the detector looks at the whole strip). So the centre alone
+	could give a line twice or not at all. Boxes of neighbouring strips that cover each other by half
+	on both axes are one line; of such a group the boxes of the strip that cuts it least are kept.
+	A box without a match is kept only from the strip that owns its centre.
+	"""
+	found = []  # (box, strip, own centre)
+	for k, (ownTop, ownBottom, _top, _bottom, boxes) in enumerate(parts):
+		for box in boxes:
+			cy = (box[1] + box[3]) / 2
+			# A centre a little past the own part is a candidate: the neighbour strip may confirm it.
+			if ownTop - margin <= cy < ownBottom + margin:
+				found.append((box, k, ownTop <= cy < ownBottom))
+	# Groups of the same line (union-find over the boxes).
+	group = list(range(len(found)))
+
+	def root(i):
+		while group[i] != i:
+			group[i] = group[group[i]]
+			i = group[i]
+		return i
+
+	for k in range(len(parts) - 1):
+		cut = parts[k][1]
+		# Only boxes that reach into the overlap around the cut can be the same line.
+		above = [i for i, f in enumerate(found) if f[1] == k and f[0][3] > cut - 2 * margin]
+		below = [i for i, f in enumerate(found) if f[1] == k + 1 and f[0][1] < cut + 2 * margin]
+		for i in above:
+			ax0, ay0, ax1, ay1 = found[i][0]
+			for j in below:
+				bx0, by0, bx1, by1 = found[j][0]
+				dx = min(ax1, bx1) - max(ax0, bx0)
+				dy = min(ay1, by1) - max(ay0, by0)
+				if dx >= 0.5 * min(ax1 - ax0, bx1 - bx0) and dy >= 0.5 * min(ay1 - ay0, by1 - by0):
+					group[root(j)] = root(i)
+	groups = {}
+	for i in range(len(found)):
+		groups.setdefault(root(i), []).append(found[i])
+	boxes = []
+	for members in groups.values():
+		if len(members) == 1:
+			box, _k, own = members[0]
+			if own:
+				boxes.append(box)
+			continue
+		y0 = min(box[1] for box, _k, _own in members)
+		y1 = max(box[3] for box, _k, _own in members)
+		cy = (y0 + y1) / 2
+		# How many rows of the line each strip misses; on a tie, the strip that owns the centre wins.
+		missed = {}
+		for _box, k, _own in members:
+			ownTop, ownBottom, top, bottom, _boxes = parts[k]
+			missed[k] = (max(0, top - y0) + max(0, y1 - bottom), not ownTop <= cy < ownBottom)
+		best = min(missed, key=missed.get)
+		boxes += [box for box, k, _own in members if k == best]
+	return boxes
+
+
+def _db_boxes(pred, sx, sy, w, h, top=0):
+	"""Detector probability map → line rectangles (x0, y0, x1, y1) in pixels of the original image.
+
+	top is the row of the map's first row in the detector input (for a strip).
+	"""
 	bitmap = (pred > DET_THRESH).astype(np.uint8)
 	contours, _hierarchy = cv2.findContours(bitmap, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 	boxes = []
@@ -503,9 +594,9 @@ def _db_boxes(pred, sx, sy, w, h):
 			continue
 		# Text on screen is horizontal, so take an upright rectangle around the rotated one.
 		x0 = max(0, math.floor(pts[:, 0].min() * sx))
-		y0 = max(0, math.floor(pts[:, 1].min() * sy))
+		y0 = max(0, math.floor((pts[:, 1].min() + top) * sy))
 		x1 = min(w, math.ceil(pts[:, 0].max() * sx))
-		y1 = min(h, math.ceil(pts[:, 1].max() * sy))
+		y1 = min(h, math.ceil((pts[:, 1].max() + top) * sy))
 		if x1 - x0 >= 2 and y1 - y0 >= 2:
 			boxes.append((x0, y0, x1, y1))
 	return boxes

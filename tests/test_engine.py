@@ -3,6 +3,7 @@
 Run: .venv/Scripts/python -m pytest tests/
 """
 
+import itertools
 import sys
 from pathlib import Path
 
@@ -100,6 +101,75 @@ def test_small_object(ocr, text):
 	for wd in words:
 		assert wd["x"] >= 0 and wd["x"] + wd["width"] <= w
 		assert wd["y"] >= 0 and wd["y"] + wd["height"] <= h
+
+
+@pytest.mark.parametrize("rows", [32, 416, 1088, 2176])
+def test_strips(rows):
+	# The own parts cover the detector input without gaps; every strip has a side that is a multiple of 32.
+	strips = engine._strips(rows)
+	assert strips[0][0] == 0 and strips[-1][1] == rows
+	assert all(s[1] == t[0] for s, t in itertools.pairwise(strips))
+	for a, b, s0, s1 in strips:
+		assert s0 <= a < b <= s1 and s0 % 32 == 0 and s1 % 32 == 0
+		assert b - a <= 1.5 * engine.DET_STRIP
+
+
+def test_join_strips():
+	# Two strips with a cut at row 100: own rows 0–100 and 100–200, the detector saw 0–132 and 68–200.
+	def join(above, below):
+		parts = [(0, 100, 0, 132, above), (100, 200, 68, 200, below)]
+		return sorted(engine._join_strips(parts, 16))
+
+	far = [(10, 20, 300, 40)], [(10, 160, 300, 180)]
+	assert join(*far) == [(10, 20, 300, 40), (10, 160, 300, 180)]
+	# The same line with its centre a pixel above the cut in one strip and below it in the other:
+	# once, whichever side the centres land on.
+	assert len(join([(10, 89, 300, 110)], [(11, 90, 301, 111)])) == 1
+	assert len(join([(10, 90, 300, 111)], [(11, 89, 301, 110)])) == 1
+	# A tall line cut by the bottom edge of the upper strip: the lower strip sees it whole.
+	assert join([(10, 80, 300, 132)], [(10, 80, 300, 140)]) == [(10, 80, 300, 140)]
+	# The upper strip merged two words that the lower one sees apart (it cuts them less): two boxes.
+	assert join([(10, 96, 300, 132)], [(10, 96, 140, 136), (160, 96, 300, 136)]) == [
+		(10, 96, 140, 136),
+		(160, 96, 300, 136),
+	]
+	# A piece of a line whose centre is past the cut, not found by the owning strip: dropped.
+	assert join([(10, 100, 300, 130)], []) == []
+	# Neighbouring lines that touch at the cut stay two lines.
+	assert join([(10, 80, 300, 101)], [(10, 99, 300, 120)]) == [(10, 80, 300, 101), (10, 99, 300, 120)]
+	# One strip: the boxes as they are.
+	assert engine._join_strips([(0, 50, 0, 50, [(1, 2, 3, 4)])], 16) == [(1, 2, 3, 4)]
+
+
+def test_text_on_strip_cuts(ocr):
+	# Words of several sizes right on the cuts between detector strips are read once each.
+	h, w = 1080, 1920
+	rows = round(h / 32) * 32
+	cuts = [b * h / rows for _a, b, _s0, _s1 in engine._strips(rows)[:-1]]
+	assert cuts
+	for shift in (-1, 0, 1):
+		img = np.full((h, w, 3), 255, np.uint8)
+		placed = []
+		for ci, cut in enumerate(cuts):
+			x = 20
+			for si, scale in enumerate((0.6, 1.2, 2.4)):
+				word = ("Open", "Save", "Tools", "Help", "View", "Edit")[(ci * 3 + si) % 6]
+				thick = max(1, int(scale * 2))
+				(tw, th), _ = cv2.getTextSize(word, cv2.FONT_HERSHEY_SIMPLEX, scale, thick)
+				cv2.putText(
+					img,
+					word,
+					(x, int(cut + shift + th / 2)),
+					cv2.FONT_HERSHEY_SIMPLEX,
+					scale,
+					(0, 0, 0),
+					thick,
+				)
+				placed.append(word)
+				x += tw + 150
+		words = [wd["text"] for line in ocr.recognize(img) for wd in line]
+		for word in placed:
+			assert words.count(word) == 1, f"shift {shift}: '{word}' in {words}"
 
 
 def test_wide_lines(ocr):
