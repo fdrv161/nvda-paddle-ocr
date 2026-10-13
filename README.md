@@ -90,6 +90,20 @@ The add-on's `lib/` and `models/` folders are not stored in git. `tools/fetch_li
 * **opencv-python-headless 5.0.0.93** (Apache 2.0), PyPI wheel `opencv_python_headless-5.0.0.93-cp37-abi3-win_amd64.whl`. Binary: `cv2.pyd`. Licenses: `lib/cv2/LICENSE.txt`, `LICENSE-3RD-PARTY.txt`.
 * **PaddleOCR models** (Apache 2.0) `det_v6_tiny`, `rec_v6_small`, `rec_cyrillic_v5`: ONNX files from the [PaddlePaddle organization on Hugging Face](https://huggingface.co/PaddlePaddle). Repository names and SHA-256 hashes are in `models/manifest.json`; the license is in `addon/licenses/PaddleOCR-models.txt`.
 
+## How this add-on was made
+
+The code, tools and tests of this add-on were written by Claude (Anthropic) in Claude Code. Every commit in the history is marked "Co-Authored-By: Claude". I am not a programmer and cannot review the Python code myself.
+
+What I did:
+
+* the idea, inspired by the discussion in [nvaccess/nvda#20780](https://github.com/nvaccess/nvda/issues/20780);
+* what the add-on can do and how to use it;
+* testing every version with significant changes in NVDA; most fixes come from that;
+* the Russian help (written with AI, then read and edited by me) and its translation into English with AI;
+* checking the Russian interface in NVDA.
+
+The models and the split into Latin and Cyrillic modes (instead of a list of languages, which I wanted at first) were chosen from accuracy and speed measurements that Claude made with the tools in this repository (`tools/accuracy.py`, `tools/bench.py`) and that I checked against my everyday use.
+
 ## Links and licenses
 
 Source code: [GitHub](https://github.com/fdrv161/nvda-paddle-ocr).
