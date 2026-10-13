@@ -17,7 +17,8 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
-# Detector post-processing settings from the inference.yml of the PP-OCRv6 models.
+# Detector post-processing settings from the inference.yml of the PP-OCRv6 models,
+# except the box threshold: 0.45 here instead of 0.4 there.
 DET_THRESH = 0.2
 DET_BOX_THRESH = 0.45
 DET_UNCLIP_RATIO = 1.4
@@ -163,7 +164,7 @@ class Reader:
 		if isinstance(classes, int) and classes != len(self._chars):
 			raise ValueError(f"Dictionary ({len(self._chars)}) does not match the model ({classes})")
 		# Banned characters (allowed(c) is false) are never chosen when decoding.
-		# Keep only the allowed columns: the multilingual model has ~600 of 18k, so decoding
+		# Keep only the allowed columns: the Latin mode keeps ~760 of 18.7k, so decoding
 		# is many times cheaper, and the chosen character is the same as with banned ones zeroed.
 		self._keep = None
 		if allowed:
@@ -273,7 +274,7 @@ class Reader:
 	def _fix_mixed_script(self, word, prob):
 		"""Removes twin letters of the wrong script: "Itет" → "Item", "Windоws" → "Windows".
 
-		The Russian model knows both Latin and Cyrillic, and with lookalike letters (е/e, а/a, т/m)
+		The Cyrillic model knows both Latin and Cyrillic, and with lookalike letters (е/e, а/a, т/m)
 		it sometimes picks the wrong script. If a word has letters of both scripts, pick the main one
 		by the sum of probabilities at the letter positions and replace each foreign letter
 		with the best letter of the main script.
@@ -309,7 +310,7 @@ def _fix_il(text):
 	"""Capital I and lowercase l look the same in sans-serif fonts; the model mixes them up: "AlI", "AII".
 
 	Only clear cases are fixed:
-	- I after a lowercase letter and not before another letter but I is l ("AlI" → "All", "FiII" → "Fill";
+	- I after a lowercase letter and not before another letter is l ("AlI" → "All", "FiII" → "Fill";
 		"AddIn" and "userID" are left alone: a letter follows the I);
 	- a capital followed only by I/l, 3+ letters in total, means lowercase l ("AII" → "All");
 	- in an all-caps word (2+ capitals) a lowercase l is I ("TlGHT" → "TIGHT", "MlDl" → "MIDI").

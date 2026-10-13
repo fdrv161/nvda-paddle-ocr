@@ -1,4 +1,4 @@
-"""Engine checks without NVDA: converting an NVDA capture to an image and word coordinates.
+"""Engine checks without NVDA: capture conversion, word coordinates, character masks and text fixes.
 
 Run: .venv/Scripts/python -m pytest tests/
 """
@@ -121,7 +121,8 @@ def test_latinOnly():
 
 
 def test_cyrillic_masks():
-	# Cyrillic mode: with NVDA in Russian only East Slavic letters, otherwise all modern Cyrillic.
+	# Cyrillic mode: East Slavic letters only, except with NVDA in another Cyrillic language or Serbian,
+	# then all modern Cyrillic.
 	assert all(engine.eastSlavicOnly(c) for c in "ЁёЇїЎўҐґЪъAz9+…→№")
 	assert not any(engine.eastSlavicOnly(c) for c in "һЈјҚқӘәЂѣ")
 	assert all(engine.anyCyrillic(c) for c in "ЁёһЈјҚқӘәЂђЉљ№")
