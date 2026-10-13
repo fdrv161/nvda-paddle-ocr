@@ -9,7 +9,7 @@ Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R) for NVDA 2026.
 There are no default hotkeys to avoid conflicts with other add-ons. You can assign them in the NVDA menu: Preferences, Input Gestures, "Paddle OCR" category.
 
 * **Recognizes the content of the current navigator object with Paddle OCR.** Opens the result window: arrows move through the text, Enter clicks on the word, Escape closes the window.
-* **Cycles through the available languages for Paddle OCR.** Latin or Cyrillic.
+* **Cycles the Paddle OCR recognition mode:** Latin or Cyrillic.
 * **Shows the Paddle OCR settings.**
 
 On the first recognition after starting NVDA, "Loading OCR models" will be announced. After that, the models remain in memory.
@@ -31,7 +31,7 @@ If NVDA is in Russian, Ukrainian, Belarusian, or Bulgarian, letters from other C
 
 NVDA menu: Preferences, Settings, "Paddle OCR" category.
 
-* **Recognition language:** Same as NVDA, Latin or Cyrillic.
+* **Recognition mode:** follow NVDA language, Latin or Cyrillic.
 * **Periodically refresh recognized content:** the result window re-reads itself while open. It loads the processor, so it is disabled by default.
 * **Automatically say all when recognition finishes:** text is spoken immediately after recognition. Enabled by default.
 

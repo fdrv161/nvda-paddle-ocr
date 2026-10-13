@@ -36,12 +36,12 @@ class PaddleOcrPanel(SettingsPanel):
 		sHelper = guiHelper.BoxSizerHelper(self, sizer=settingsSizer)
 		conf = config.conf["paddleOcr"]
 		self._langs = ["", *LANGUAGES]
-		# Translators: Language choice in Paddle OCR settings: use the NVDA interface language.
-		names = [_("Same as NVDA ({language})").format(language=languageName(getLanguage(auto=True)))]
+		# Translators: Recognition mode choice in Paddle OCR settings: by the NVDA interface language.
+		names = [_("Follow NVDA language ({language})").format(language=languageName(getLanguage(auto=True)))]
 		names += [languageName(lang) for lang in LANGUAGES]
 		self.languageList = sHelper.addLabeledControl(
-			# Translators: Label of the recognition language list in Paddle OCR settings.
-			_("Recognition &language:"),
+			# Translators: Label of the recognition mode list in Paddle OCR settings.
+			_("Recognition &mode:"),
 			wx.Choice,
 			choices=names,
 		)
@@ -106,7 +106,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 	@script(
 		# Translators: Description of the command in the Input Gestures dialog.
-		description=_("Cycles through the available languages for Paddle OCR"),
+		description=_("Cycles the Paddle OCR recognition mode"),
 	)
 	def script_cycleLanguage(self, gesture):
 		langs = list(LANGUAGES)

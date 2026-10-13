@@ -51,7 +51,7 @@ def _nvdaLanguage():
 
 
 def languageName(lang):
-	# Translators: OCR language names, spoken when switching the Paddle OCR language.
+	# Translators: Recognition mode names, spoken when switching the Paddle OCR recognition mode.
 	# The models read alphabets, not languages, so the modes are named by script.
 	return {"en": _("Latin"), "ru": _("Cyrillic")}[lang]
 
