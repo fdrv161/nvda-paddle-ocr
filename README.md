@@ -69,7 +69,7 @@ What's new in each version is on the [releases page](https://github.com/fdrv161/
 
 ## How this add-on was made
 
-The code, tools and tests of this add-on were written by Claude (Anthropic) in Claude Code. Every commit in the history is marked "Co-Authored-By: Claude". I am not a programmer and cannot review the Python code myself.
+The code, tools and tests of this add-on were written by Claude (Anthropic) in Claude Code. Most commits in the history are marked "Co-Authored-By: Claude"; the few that are not are small README and manifest edits I made myself, or changes written by Claude that I committed myself. I am not a programmer and cannot review the Python code myself.
 
 What I did:
 
