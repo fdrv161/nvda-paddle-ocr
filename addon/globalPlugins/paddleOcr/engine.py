@@ -17,6 +17,10 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
+# The official onnxruntime build sends trace events through Windows ETW by default. Turned off before any
+# session is created; a single start-up event may still be sent when the library loads.
+ort.disable_telemetry_events()
+
 # Detector post-processing settings from the inference.yml of the PP-OCRv6 models,
 # except the box threshold: 0.45 here instead of 0.4 there.
 DET_THRESH = 0.2

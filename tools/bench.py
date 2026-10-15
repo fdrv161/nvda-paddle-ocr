@@ -4,6 +4,7 @@ Run: .venv/Scripts/python tools/bench.py [images...]
   --mode en|ru       only one mode (default: both, Latin and Cyrillic)
   --models DET REC   another pair of models from models/ instead of the modes, e.g.
                      --models det_v6_small rec_v6_small (download it first with tools/fetch_models.py)
+  --threads N        onnxruntime threads (default 0: all physical cores, as in the add-on)
 Images: the given files, otherwise tests/screens/*.png, otherwise a synthetic 1920×1080 screen.
 A synthetic console screen with full-width lines is always added: wide lines are the worst case for memory.
 Each mode runs in its own process, so its memory peak is not mixed with another mode.
@@ -106,7 +107,7 @@ def load_images(paths):
 	return images
 
 
-def run_one(label, det, rec, allowed, paths, models=PLUGIN_MODELS):
+def run_one(label, det, rec, allowed, paths, models=PLUGIN_MODELS, threads=0):
 	"""One mode in the current process: load time, speed, memory now and at the peak."""
 	files = [models / det / "inference.onnx", models / rec / "inference.onnx", models / rec / "inference.yml"]
 	missing = [str(f) for f in files if not f.exists()]
@@ -121,7 +122,7 @@ def run_one(label, det, rec, allowed, paths, models=PLUGIN_MODELS):
 	now, _peak = memory()
 	print(f"\n{label} ({det} + {rec}). Память до загрузки: {now:.0f} МБ")
 	t = time.perf_counter()
-	eng = engine.OcrEngine(*files, allowed=allowed)
+	eng = engine.OcrEngine(*files, threads=threads, allowed=allowed)
 	now, peak = memory()
 	print(f"Загрузка {time.perf_counter() - t:.2f} с, память после загрузки {now:.0f} МБ")
 	for name, img in images:
@@ -146,19 +147,30 @@ def main():
 	parser.add_argument("images", nargs="*", type=Path)
 	parser.add_argument("--mode", choices=list(MODES))
 	parser.add_argument("--models", nargs=2, metavar=("DET", "REC"))
+	parser.add_argument(
+		"--threads", type=int, default=0, help="потоков onnxruntime (0 — все ядра, как в дополнении)"
+	)
 	# Internal: run one mode in this process (the parent starts a process per mode).
 	parser.add_argument("--one", help=argparse.SUPPRESS)
 	args = parser.parse_args()
 	if args.models:
 		det, rec = args.models
-		run_one("Свои модели", det, rec, None, args.images, MODELS)
+		run_one("Свои модели", det, rec, None, args.images, MODELS, args.threads)
 		return 0
 	if args.one:
 		label, det, rec, allowed = MODES[args.one]
-		run_one(label, det, rec, allowed, args.images)
+		run_one(label, det, rec, allowed, args.images, threads=args.threads)
 		return 0
 	for mode in [args.mode] if args.mode else list(MODES):
-		cmd = [sys.executable, __file__, "--one", mode, *map(str, args.images)]
+		cmd = [
+			sys.executable,
+			__file__,
+			"--one",
+			mode,
+			"--threads",
+			str(args.threads),
+			*map(str, args.images),
+		]
 		if subprocess.run(cmd, check=False).returncode:
 			return 1
 	return 0

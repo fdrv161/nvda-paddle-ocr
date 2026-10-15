@@ -1,10 +1,19 @@
 # Paddle OCR for NVDA
 
+* Author: fdrv161
+* NVDA compatibility: 2026.3 and later
+
 Screen OCR for the NVDA screen reader with local PaddleOCR models.
 
 ## About the add-on
 
 Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R) for NVDA 2026.3 and newer. The add-on uses compact PaddleOCR recognition models from Baidu that run locally. This engine usually reads more accurately, especially small fonts, text on dark backgrounds, and non-standard interfaces such as VST plugins. The result window and screen curtain behavior are the same as with Windows OCR.
+
+## Requirements
+
+* NVDA 2026.3 or later.
+* The Microsoft Visual C++ Redistributable x64 package. It is usually already installed; if it is missing, the add-on says so (see "Limitations and nuances" below).
+* Memory: after the first recognition the add-on keeps about 100 MB (libraries and models). While recognizing, NVDA briefly uses up to 250–300 MB more than right after it starts.
 
 ## Installation
 
@@ -47,13 +56,14 @@ NVDA menu: Preferences, Settings, "Paddle OCR" category.
 
 ## Privacy
 
-The add-on does not connect to the internet, does not send anything anywhere, and does not save either screenshots or recognized text to disk. Only its settings are stored in the NVDA configuration. Only error messages go into the NVDA log, and at the "debug" log level, also the image size and how long recognition took.
+The add-on does not connect to the internet, does not send anything anywhere, and does not save either screenshots or recognized text to disk. Only its settings are stored in the NVDA configuration. Only error messages go into the NVDA log, and at the "debug" log level, also the image size, how long recognition took, and the versions and folders of the libraries it uses.
 
 ## Limitations and nuances
 
 * Icons and interface frames are sometimes recognized as random characters like "x", "o", "+".
 * Short single words made of letters that are the same in both alphabets are sometimes read with the wrong letters.
-* The system library `MSVCP140_1.dll` is required. If an error sounds during recognition and this library is mentioned in the NVDA log, install the [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170) package from the Microsoft website.
+* The system library `MSVCP140_1.dll` from the Microsoft Visual C++ Redistributable x64 package is required. If it is missing, the add-on says so after "Recognition failed": install the [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170) package from the Microsoft website and restart NVDA.
+* The add-on brings its own numpy, OpenCV and ONNX Runtime libraries. If another add-on brings its own copies of them and loads them first, Paddle OCR may not work: the NVDA log at the "debug" level shows where these libraries were loaded from.
 
 ## Version history
 
@@ -77,11 +87,11 @@ The models and the split into Latin and Cyrillic modes (instead of a list of lan
 
 Bug reports and suggestions: [Issues](https://github.com/fdrv161/nvda-paddle-ocr/issues).
 
-Projects used: [NVDA](https://www.nvaccess.org/), [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), [onnxruntime](https://github.com/microsoft/onnxruntime), [OpenCV](https://opencv.org/), [NumPy](https://numpy.org/).
+Built on [NVDA](https://www.nvaccess.org/), [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), [ONNX Runtime](https://github.com/microsoft/onnxruntime), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
 
 The add-on code is distributed under [GPL v2 or later](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html), PaddleOCR models and OpenCV under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0), onnxruntime under [MIT](https://opensource.org/licenses/MIT), NumPy under [BSD](https://opensource.org/licenses/BSD-3-Clause).
 
-Library versions included in the add-on: onnxruntime 1.30.0, NumPy 2.5.3, opencv-python-headless 5.0.0.93, taken unchanged from PyPI. Where each file was taken from is described in the Third-party components section below.
+Library versions included in the add-on: onnxruntime 1.30.0, NumPy 2.5.3, opencv-python-headless 5.0.0.93, from PyPI. Their files are not modified; only parts not needed for recognition, such as tests and type hints, are left out. Where each file was taken from is described in the Third-party components section below.
 
 ## For developers
 

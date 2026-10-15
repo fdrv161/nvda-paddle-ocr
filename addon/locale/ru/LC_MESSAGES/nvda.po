@@ -39,6 +39,13 @@ msgstr "Кириллица"
 msgid "Loading OCR models"
 msgstr "Загрузка моделей OCR"
 
+msgid ""
+"Microsoft Visual C++ Redistributable x64 is missing. Install it from the "
+"Microsoft website and restart NVDA"
+msgstr ""
+"Не хватает пакета Microsoft Visual C++ Redistributable x64. Установите его с "
+"сайта Microsoft и перезапустите NVDA"
+
 msgid "Recognition in progress"
 msgstr "Распознавание уже идёт"
 
