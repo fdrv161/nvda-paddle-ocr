@@ -94,21 +94,24 @@ class _FakeEngine:
 	"""Stand-in for engine.py: recognition waits until the test opens the gate."""
 
 	gate = threading.Event()
-	latinOnly = eastSlavicOnly = anyCyrillic = None
+	latinOnly, eastSlavicOnly, anyCyrillic = "latinOnly", "eastSlavicOnly", "anyCyrillic"
+	# The allowed= of every engine built, in order.
+	built = []  # noqa: RUF012
 
 	@staticmethod
 	def bgraToBgr(buf, w, h):
 		return buf
 
 	class OcrEngine:
-		def __init__(self, *args, **kwargs):
-			pass
+		def __init__(self, *args, allowed=None, **kwargs):
+			_FakeEngine.built.append(allowed)
 
 		def recognize(self, bgr):
 			assert _FakeEngine.gate.wait(WAIT)
 			return ["line"]
 
 
+nvdaLanguage = "en"
 api = _module("api", focus=None)
 api.getFocusObject = lambda: api.focus
 log = _Log()
@@ -122,8 +125,8 @@ def _initTranslation():
 
 _STUBS = {
 	"addonHandler": _module("addonHandler", initTranslation=_initTranslation),
-	"config": _module("config", conf={"paddleOcr": {"language": "en", "autoRefresh": False}}),
-	"languageHandler": _module("languageHandler", getLanguage=lambda: "en"),
+	"config": _module("config", conf={"paddleOcr": {}}),
+	"languageHandler": _module("languageHandler", getLanguage=lambda: nvdaLanguage),
 	"queueHandler": _module(
 		"queueHandler",
 		eventQueue=object(),
@@ -165,6 +168,9 @@ def rec(monkeypatch):
 	api.focus = None
 	recogUi.__init__()
 	_FakeEngine.gate.clear()
+	_FakeEngine.built.clear()
+	_STUBS["config"].conf["paddleOcr"] = {"language": "en", "allCyrillic": False, "autoRefresh": False}
+	monkeypatch.setattr(sys.modules[__name__], "nvdaLanguage", "en")
 	yield module
 	# Let worker threads of the test finish.
 	_FakeEngine.gate.set()
@@ -307,6 +313,50 @@ def test_missing_runtime_is_explained(rec, monkeypatch):
 	# The advice comes after the result, that is after NVDA's "Recognition failed".
 	assert events[-1] == ("say", result.spoken)
 	assert "Visual C++" in result.spoken
+
+
+def _recognizeOnce(ocr):
+	recogUi.done.clear()
+	ocr.recognizeFromCommand()
+	assert recogUi.done.wait(WAIT)
+
+
+@pytest.mark.parametrize(
+	("nvda", "allCyrillic", "charset"),
+	[
+		("ru", False, "eastSlavicOnly"),
+		("en", False, "eastSlavicOnly"),
+		("en", True, "anyCyrillic"),
+		("ru", True, "anyCyrillic"),
+		("mk", False, "anyCyrillic"),
+		("sr", False, "anyCyrillic"),
+	],
+)
+def test_cyrillic_charset(rec, monkeypatch, nvda, allCyrillic, charset):
+	monkeypatch.setattr(sys.modules[__name__], "nvdaLanguage", nvda)
+	conf = _STUBS["config"].conf["paddleOcr"]
+	conf["language"] = "ru"
+	conf["allCyrillic"] = allCyrillic
+	_FakeEngine.gate.set()
+	_recognizeOnce(rec.PaddleOcr())
+	assert _FakeEngine.built == [charset]
+
+
+def test_all_cyrillic_setting_rebuilds_only_cyrillic(rec):
+	conf = _STUBS["config"].conf["paddleOcr"]
+	ocr = rec.PaddleOcr()
+	_FakeEngine.gate.set()
+	_recognizeOnce(ocr)
+	# In the Latin mode the setting changes nothing: the engine is kept, no "Loading OCR models".
+	conf["allCyrillic"] = True
+	events.clear()
+	_recognizeOnce(ocr)
+	assert _said() == ["Recognizing"]
+	conf["language"] = "ru"
+	_recognizeOnce(ocr)
+	conf["allCyrillic"] = False
+	_recognizeOnce(ocr)
+	assert _FakeEngine.built == ["latinOnly", "anyCyrillic", "eastSlavicOnly"]
 
 
 def test_library_outside_addon_is_logged(rec, monkeypatch):

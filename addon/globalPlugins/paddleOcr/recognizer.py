@@ -43,8 +43,11 @@ _CYRILLIC_NVDA = {
 	"ky",
 	"mn",
 }
-# With these NVDA languages only their letters are allowed (see engine.eastSlavicOnly).
-_EAST_SLAVIC_NVDA = {"ru", "uk", "be", "bg"}
+# With these NVDA languages the Cyrillic mode allows letters of all Cyrillic alphabets without the setting:
+# Macedonian, Kyrgyz and Mongolian need their own letters. NVDA's Serbian is in Latin script, but those who
+# switch to the Cyrillic mode by hand need Serbian Cyrillic letters. Otherwise only Russian, Ukrainian,
+# Belarusian and Bulgarian letters are allowed (see engine.eastSlavicOnly).
+_ALL_CYRILLIC_NVDA = {"mk", "ky", "mn", "sr"}
 
 
 def _nvdaLanguage():
@@ -65,9 +68,22 @@ def getLanguage(auto=False):
 	return "ru" if _nvdaLanguage() in _CYRILLIC_NVDA else "en"
 
 
+def _charset(lang):
+	"""Which characters the recognizer may output: the name of a filter in engine.py.
+
+	Called on NVDA's main thread, so the recognition thread does not read the config.
+	"""
+	if lang == "en":
+		return "latinOnly"
+	if config.conf["paddleOcr"]["allCyrillic"] or _nvdaLanguage() in _ALL_CYRILLIC_NVDA:
+		return "anyCyrillic"
+	return "eastSlavicOnly"
+
+
 # One engine for the whole NVDA session: loading is slow, but requests after it are fast.
+# It is rebuilt when its key (language, charset) changes.
 _engine = None
-_engineLang = None
+_engineKey = None
 # One request at a time, even if two threads managed to start.
 _runLock = threading.Lock()
 # A recognition running longer than this many seconds is taken as stuck: the command may start
@@ -146,27 +162,20 @@ def _importEngine():
 	return engine
 
 
-def _getEngine(lang):
-	global _engine, _engineLang
-	if _engine is None or _engineLang != lang:
+def _getEngine(key):
+	global _engine, _engineKey
+	if _engine is None or _engineKey != key:
 		engine = _importEngine()
+		lang, charset = key
 		det, rec = LANGUAGES[lang]
-		if lang == "en":
-			allowed = engine.latinOnly
-		elif _nvdaLanguage() in _CYRILLIC_NVDA - _EAST_SLAVIC_NVDA or _nvdaLanguage() == "sr":
-			# NVDA in Macedonian, Serbian, etc.: the letters of that language are needed.
-			# Serbian is not in _CYRILLIC_NVDA, but those who switch to Cyrillic by hand need its letters.
-			allowed = engine.anyCyrillic
-		else:
-			allowed = engine.eastSlavicOnly
 		_engine = None  # Release the old engine first so two are never in memory at once.
 		_engine = engine.OcrEngine(
 			os.path.join(_MODELS, det, "inference.onnx"),
 			os.path.join(_MODELS, rec, "inference.onnx"),
 			os.path.join(_MODELS, rec, "inference.yml"),
-			allowed=allowed,
+			allowed=getattr(engine, charset),
 		)
-		_engineLang = lang
+		_engineKey = key
 	return _engine
 
 
@@ -253,7 +262,8 @@ class PaddleOcr(ContentRecognizer):
 			ui.message(self._notice)
 			self._notice = None
 		lang = getLanguage()
-		if _engine is None or _engineLang != lang:
+		key = (lang, _charset(lang))
+		if _engine is None or _engineKey != key:
 			# Translators: Spoken once, while OCR models are loaded for the first recognition.
 			ui.message(_("Loading OCR models"))
 		token = object()
@@ -263,12 +273,12 @@ class PaddleOcr(ContentRecognizer):
 			self._fromCommand = self._inCommand
 		threading.Thread(
 			target=self._run,
-			args=(buf, imageInfo, onResult, token, lang),
+			args=(buf, imageInfo, onResult, token, key),
 			name="paddleOcr",
 			daemon=True,
 		).start()
 
-	def _run(self, buf, imageInfo, onResult, token, lang):
+	def _run(self, buf, imageInfo, onResult, token, key):
 		# A previous recognition stuck in the model keeps the lock: do not wait for it forever.
 		if not _runLock.acquire(timeout=STUCK_AFTER):
 			# recogUi itself logs the error and says "Recognition failed"; the advice to restart NVDA
@@ -282,7 +292,7 @@ class PaddleOcr(ContentRecognizer):
 				return
 			try:
 				start = time.perf_counter()
-				eng = _getEngine(lang)
+				eng = _getEngine(key)
 				loaded = time.perf_counter()
 				from . import engine
 
@@ -291,7 +301,7 @@ class PaddleOcr(ContentRecognizer):
 				# Only with the NVDA log level set to debug: to compare speed on other computers.
 				# Numbers only, never the recognized text.
 				log.debug(
-					f"Paddle OCR: {lang}, {imageInfo.recogWidth}x{imageInfo.recogHeight}, "
+					f"Paddle OCR: {key[0]} ({key[1]}), {imageInfo.recogWidth}x{imageInfo.recogHeight}, "
 					f"{len(lines)} lines, loading {loaded - start:.2f} s, "
 					f"recognition {time.perf_counter() - loaded:.2f} s",
 				)

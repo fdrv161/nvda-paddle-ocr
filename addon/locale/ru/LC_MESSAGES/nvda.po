@@ -15,6 +15,9 @@ msgstr "По языку NVDA ({language})"
 msgid "Recognition &mode:"
 msgstr "&Режим распознавания:"
 
+msgid "&Letters of all Cyrillic alphabets in the Cyrillic mode"
+msgstr "&Буквы всех кириллических алфавитов в режиме «Кириллица»"
+
 msgid "Periodically &refresh recognized content"
 msgstr "Периодически &обновлять распознанное содержимое"
 

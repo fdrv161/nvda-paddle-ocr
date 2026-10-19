@@ -44,19 +44,20 @@ The add-on works in two modes, by alphabet:
 
 By default the mode follows the NVDA language: Latin for English, Cyrillic for Russian.
 
-If NVDA is in Russian, Ukrainian, Belarusian, or Bulgarian, letters from other Cyrillic alphabets are disabled so that random artifacts like "һ" instead of "н" do not get into the text.
+In the Cyrillic mode, only Russian, Ukrainian, Belarusian and Bulgarian letters are recognized by default, so that random artifacts like "һ" instead of "н" do not get into the text. For Kazakh, Serbian, Tatar, Bashkir and other languages, turn on "Letters of all Cyrillic alphabets in the Cyrillic mode" in the settings. With NVDA in Macedonian, Kyrgyz, Mongolian or Serbian, these letters are always on.
 
 ## Settings
 
 NVDA menu: Preferences, Settings, "Paddle OCR" category.
 
 * **Recognition mode:** follow NVDA language, Latin or Cyrillic.
+* **Letters of all Cyrillic alphabets in the Cyrillic mode:** for languages other than Russian, Ukrainian, Belarusian and Bulgarian. Disabled by default.
 * **Periodically refresh recognized content:** the result window re-reads itself while open. It loads the processor, so it is disabled by default.
 * **Automatically say all when recognition finishes:** text is spoken immediately after recognition. Enabled by default.
 
 ## Privacy
 
-The add-on does not connect to the internet, does not send anything anywhere, and does not save either screenshots or recognized text to disk. Only its settings are stored in the NVDA configuration. Only errors go into the NVDA log, and at the "debug" level also technical details: image size, recognition time, library versions.
+The add-on does not connect to the internet. Screenshots and recognized text are not sent anywhere and are not saved to disk. Only its settings are stored in the NVDA configuration. Only errors go into the NVDA log, and at the "debug" level also technical details: image size, recognition time, library versions.
 
 ## Limitations and nuances
 

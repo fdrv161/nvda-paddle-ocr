@@ -67,6 +67,23 @@ def compile_po(path):
 	return header + table + ids + strs
 
 
+def translatable(plugin):
+	"""All strings in _() of the plugin. Through the syntax tree, not a regex: strings split over several
+	lines of code are found too."""
+	used = set()
+	for f in plugin.glob("*.py"):
+		for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
+			if (
+				isinstance(node, ast.Call)
+				and isinstance(node.func, ast.Name)
+				and node.func.id == "_"
+				and node.args
+				and isinstance(node.args[0], ast.Constant)
+			):
+				used.add(node.args[0].value)
+	return used
+
+
 def main():
 	manifest = (ADDON / "manifest.ini").read_text(encoding="utf-8")
 	# Values may be quoted (the NVDA guide asks for quotes), so take what is inside them.
@@ -78,12 +95,7 @@ def main():
 			print(f"Ошибка: нет папки {plugin / need}. Запустите tools/fetch_libs.py")
 			return 1
 	# Remind about untranslated strings so English does not show up in the Russian interface.
-	used = set()
-	for f in plugin.glob("*.py"):
-		used |= {
-			ast.literal_eval(s)
-			for s in re.findall(r'_\(("(?:[^"\\]|\\.)*")\)', f.read_text(encoding="utf-8"))
-		}
+	used = translatable(plugin)
 	for po in ADDON.glob("locale/*/LC_MESSAGES/nvda.po"):
 		for s in sorted(used - set(parse_po(po))):
 			print(f"Нет перевода ({po.parent.parent.name}): {s}")

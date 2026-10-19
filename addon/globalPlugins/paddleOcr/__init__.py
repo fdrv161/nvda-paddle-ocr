@@ -23,6 +23,8 @@ addonHandler.initTranslation()
 # An empty language means "same as NVDA" (see recognizer.getLanguage). The rest mirrors Windows OCR.
 config.conf.spec["paddleOcr"] = {
 	"language": "string(default='')",
+	# Cyrillic mode: letters of all Cyrillic alphabets, not only Russian, Ukrainian, Belarusian, Bulgarian.
+	"allCyrillic": "boolean(default=false)",
 	"autoRefresh": "boolean(default=false)",
 	"autoSayAllOnResult": "boolean(default=true)",
 }
@@ -47,6 +49,12 @@ class PaddleOcrPanel(SettingsPanel):
 		)
 		lang = conf["language"]
 		self.languageList.SetSelection(self._langs.index(lang) if lang in self._langs else 0)
+		self.allCyrillicCheckBox = sHelper.addItem(
+			# Translators: Checkbox in Paddle OCR settings. Without it the Cyrillic mode reads only
+			# Russian, Ukrainian, Belarusian and Bulgarian letters.
+			wx.CheckBox(self, label=_("&Letters of all Cyrillic alphabets in the Cyrillic mode")),
+		)
+		self.allCyrillicCheckBox.SetValue(conf["allCyrillic"])
 		self.autoRefreshCheckBox = sHelper.addItem(
 			# Translators: Checkbox in Paddle OCR settings.
 			wx.CheckBox(self, label=_("Periodically &refresh recognized content")),
@@ -61,6 +69,7 @@ class PaddleOcrPanel(SettingsPanel):
 	def onSave(self):
 		conf = config.conf["paddleOcr"]
 		conf["language"] = self._langs[self.languageList.GetSelection()]
+		conf["allCyrillic"] = self.allCyrillicCheckBox.GetValue()
 		conf["autoRefresh"] = self.autoRefreshCheckBox.GetValue()
 		conf["autoSayAllOnResult"] = self.autoSayAllCheckBox.GetValue()
 
