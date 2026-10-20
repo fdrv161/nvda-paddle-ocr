@@ -15,7 +15,7 @@ import config
 import languageHandler
 import queueHandler
 import ui
-from contentRecog import ContentRecognizer, LinesWordsResult
+from contentRecog import ContentRecognizer, LinesWordsResult, LwrTextInfo
 from logHandler import log
 
 addonHandler.initTranslation()
@@ -179,6 +179,56 @@ def _getEngine(key):
 	return _engine
 
 
+# After a click the mouse goes back to where it was, but not at once: some programs handle the click
+# a moment later and would see the mouse already gone.
+CLICK_SETTLE_MS = 300
+# Where the mouse was before the clicks, while its return is pending, and when the last click was:
+# quick repeated clicks must return it to the user's place, not to the previous click point.
+_mouseHome = None
+_lastClick = 0.0
+
+
+def _returnMouse():
+	global _mouseHome
+	import core
+	import winUser
+
+	wait = _lastClick + CLICK_SETTLE_MS / 1000 - time.monotonic()
+	if wait > 0:
+		core.callLater(int(wait * 1000) + 1, _returnMouse)
+		return
+	winUser.setCursorPos(*_mouseHome)
+	_mouseHome = None
+
+
+class PaddleTextInfo(LwrTextInfo):
+	"""Enter in the result window clicks the middle of the word at the cursor."""
+
+	def activate(self):
+		# The same checks as NVDA's own activate: NotImplementedError is what recogUi expects.
+		if not self.obj.isInForeground or not self.result.words:
+			raise NotImplementedError
+		import core
+		import mouseHandler
+		import winUser
+
+		global _mouseHome, _lastClick
+		# NVDA clicks pointAtStart, the top left corner of the word. On small buttons, links and dense lists
+		# that corner is often just outside the element or on the line above; the middle is inside.
+		point = self._getPointFromOffset(self.bookmark.startOffset)
+		if _mouseHome is None:
+			_mouseHome = tuple(winUser.getCursorPos())
+			core.callLater(CLICK_SETTLE_MS, _returnMouse)
+		_lastClick = time.monotonic()
+		winUser.setCursorPos(point.x, point.y)
+		mouseHandler.doPrimaryClick()
+
+
+class PaddleResult(LinesWordsResult):
+	def makeTextInfo(self, obj, position):
+		return PaddleTextInfo(obj, position, self)
+
+
 class PaddleOcr(ContentRecognizer):
 	# recogUi reads these properties on every recognition, so settings take effect immediately.
 	@property
@@ -305,7 +355,7 @@ class PaddleOcr(ContentRecognizer):
 					f"{len(lines)} lines, loading {loaded - start:.2f} s, "
 					f"recognition {time.perf_counter() - loaded:.2f} s",
 				)
-				result = LinesWordsResult(lines, imageInfo)
+				result = PaddleResult(lines, imageInfo)
 			except MissingRuntimeError as e:
 				# No traceback: recogUi logs the message itself.
 				result = e

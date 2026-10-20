@@ -111,6 +111,34 @@ class _FakeEngine:
 			return ["line"]
 
 
+class _LinesWordsResult:
+	def __init__(self, data, imageInfo):
+		self.data = data
+		self.words = list(data)
+		# Screen points of the words' middles, by offset: what NVDA's OffsetsTextInfo computes.
+		self.points = {}
+
+
+class _LwrTextInfo:
+	def __init__(self, obj, position, result):
+		self.obj, self.result = obj, result
+		self.bookmark = types.SimpleNamespace(startOffset=position)
+
+	def _getPointFromOffset(self, offset):
+		return self.result.points[offset]
+
+
+# Stand-ins for the mouse: clicks and cursor moves in order, and callLater calls run by the test.
+mouse = []
+later = []
+_cursor = [500, 600]
+
+
+def _setCursorPos(x, y):
+	_cursor[:] = [x, y]
+	mouse.append(("move", x, y))
+
+
 nvdaLanguage = "en"
 api = _module("api", focus=None)
 api.getFocusObject = lambda: api.focus
@@ -135,10 +163,14 @@ _STUBS = {
 	"ui": _module("ui", message=_say),
 	"logHandler": _module("logHandler", log=log),
 	"api": api,
+	"winUser": _module("winUser", getCursorPos=lambda: list(_cursor), setCursorPos=_setCursorPos),
+	"mouseHandler": _module("mouseHandler", doPrimaryClick=lambda: mouse.append(("click", *_cursor))),
+	"core": _module("core", callLater=lambda ms, func, *args: later.append((ms, func, args))),
 	"contentRecog": _module(
 		"contentRecog",
 		ContentRecognizer=object,
-		LinesWordsResult=lambda lines, info: ("lines", tuple(lines)),
+		LinesWordsResult=_LinesWordsResult,
+		LwrTextInfo=_LwrTextInfo,
 		recogUi=_module("contentRecog.recogUi"),
 	),
 }
@@ -171,6 +203,9 @@ def rec(monkeypatch):
 	_FakeEngine.built.clear()
 	_STUBS["config"].conf["paddleOcr"] = {"language": "en", "allCyrillic": False, "autoRefresh": False}
 	monkeypatch.setattr(sys.modules[__name__], "nvdaLanguage", "en")
+	mouse.clear()
+	later.clear()
+	_cursor[:] = [500, 600]
 	yield module
 	# Let worker threads of the test finish.
 	_FakeEngine.gate.set()
@@ -198,7 +233,7 @@ def test_second_press_keeps_running(rec):
 	assert _said() == ["Recognizing", "Loading OCR models", "Recognition in progress"]
 	_FakeEngine.gate.set()
 	assert recogUi.done.wait(WAIT)
-	assert _results() == [("lines", ("line",))]
+	assert [r.data for r in _results()] == [["line"]]
 	assert ocr.pending() is None
 
 
@@ -369,3 +404,53 @@ def test_library_outside_addon_is_logged(rec, monkeypatch):
 	rec._logLibraries(lib)
 	assert len(log.warnings) == 1
 	assert "onnxruntime" in log.warnings[0]
+
+
+def _textInfo(rec, offset, foreground=True):
+	result = rec.PaddleResult(["word"], _imageInfo())
+	result.points = {0: types.SimpleNamespace(x=110, y=205), 5: types.SimpleNamespace(x=150, y=205)}
+	obj = types.SimpleNamespace(isInForeground=foreground)
+	return result.makeTextInfo(obj, offset)
+
+
+def _runLater(rec, monkeypatch, seconds):
+	"""Runs the callLater calls pending now as if that much time had passed; new ones stay pending."""
+	now = rec.time.monotonic() + seconds
+	monkeypatch.setattr(rec.time, "monotonic", lambda: now)
+	pending = list(later)
+	later.clear()
+	for _ms, func, args in pending:
+		func(*args)
+
+
+def test_click_in_word_middle_then_mouse_returns(rec, monkeypatch):
+	_textInfo(rec, 0).activate()
+	assert mouse == [("move", 110, 205), ("click", 110, 205)]
+	_runLater(rec, monkeypatch, 1)
+	assert _cursor == [500, 600]
+
+
+def test_mouse_waits_before_returning(rec, monkeypatch):
+	_textInfo(rec, 0).activate()
+	_runLater(rec, monkeypatch, 0.1)
+	# Too early: the return is put off, the mouse stays on the word.
+	assert _cursor == [110, 205]
+	assert later
+
+
+def test_quick_second_click_returns_to_user_place(rec, monkeypatch):
+	_textInfo(rec, 0).activate()
+	_textInfo(rec, 5).activate()
+	assert mouse[-1] == ("click", 150, 205)
+	_runLater(rec, monkeypatch, 1)
+	assert _cursor == [500, 600]
+
+
+@pytest.mark.parametrize("foreground", [False, True])
+def test_no_click_when_impossible(rec, foreground):
+	info = _textInfo(rec, 0, foreground)
+	if foreground:
+		info.result.words = []
+	with pytest.raises(NotImplementedError):
+		info.activate()
+	assert mouse == []
