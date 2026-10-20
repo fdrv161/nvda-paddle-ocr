@@ -74,13 +74,9 @@ The code, tools and tests of this add-on were written by Claude (Anthropic) in C
 
 What I did:
 
-* the idea, inspired by the discussion in [nvaccess/nvda#20780](https://github.com/nvaccess/nvda/issues/20780);
 * what the add-on can do and how to use it;
 * testing every version with significant changes in NVDA; most fixes come from that;
 * the Russian help (written with AI, then read and edited by me) and its translation into English with AI;
-* checking the Russian interface in NVDA.
-
-The models and the split into Latin and Cyrillic modes (instead of a list of languages, which I wanted at first) were chosen from accuracy and speed measurements that Claude made with the tools in this repository (`tools/accuracy.py`, `tools/bench.py`) and that I checked against my everyday use.
 
 ## Links and licenses
 
