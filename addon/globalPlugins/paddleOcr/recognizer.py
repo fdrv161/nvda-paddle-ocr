@@ -201,6 +201,30 @@ def _returnMouse():
 	_mouseHome = None
 
 
+def _withNavigator(obj, func):
+	"""Runs func with obj as the navigator object, then puts the user's navigator object,
+	review position and review mode back.
+	recogUi can only recognize the navigator object, and it reads its location right away,
+	so the navigator moves only for that moment."""
+	import api
+	import globalVars
+	import review
+
+	oldNav = api.getNavigatorObject()
+	oldReview = globalVars.reviewPosition
+	oldMode = review.getCurrentMode()
+	api.setNavigatorObject(obj)
+	try:
+		func()
+	finally:
+		api.setNavigatorObject(oldNav)
+		# setNavigatorObject may switch between document and object review and forgets the review cursor.
+		if review.getCurrentMode() != oldMode:
+			review.setCurrentMode(oldMode, False)
+		if oldReview is not None:
+			api.setReviewPosition(oldReview, clearNavigatorObject=False)
+
+
 class PaddleTextInfo(LwrTextInfo):
 	"""Enter in the result window clicks the middle of the word at the cursor."""
 
@@ -260,9 +284,10 @@ class PaddleOcr(ContentRecognizer):
 				return None
 			return time.monotonic() - self._started, self._fromCommand
 
-	def recognizeFromCommand(self):
+	def recognizeFromCommand(self, obj=None):
 		"""The recognition command: the same as NVDA+R with Windows OCR, but a running recognition
-		is kept instead of being cancelled and started over."""
+		is kept instead of being cancelled and started over.
+		obj: recognize this object (the window, the desktop) instead of the navigator object."""
 		import api
 		from contentRecog import recogUi
 
@@ -295,7 +320,10 @@ class PaddleOcr(ContentRecognizer):
 		self._inCommand = True
 		self._notice = notice
 		try:
-			recogUi.recognizeNavigatorObject(self)
+			if obj is None:
+				recogUi.recognizeNavigatorObject(self)
+			else:
+				_withNavigator(obj, lambda: recogUi.recognizeNavigatorObject(self))
 		finally:
 			self._inCommand = False
 			self._notice = None

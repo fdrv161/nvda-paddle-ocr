@@ -73,6 +73,8 @@ class _RecogUi:
 		if self.active:
 			self.active.cancel()
 		_say("Recognizing")
+		# What NVDA captures: the location of the navigator object at this moment.
+		events.append(("navigator", api.navigator))
 		self.active = recognizer
 		recognizer.recognize(_pixels(), _imageInfo(), self.onFirstResult)
 
@@ -142,6 +144,29 @@ def _setCursorPos(x, y):
 nvdaLanguage = "en"
 api = _module("api", focus=None)
 api.getFocusObject = lambda: api.focus
+# The navigator, the review cursor and the review mode as NVDA keeps them.
+globalVars = _module("globalVars", reviewPosition=None)
+review = _module("review", mode="object")
+review.getCurrentMode = lambda: review.mode
+review.setCurrentMode = lambda mode, updateReviewPosition=True: setattr(review, "mode", mode)
+api.getNavigatorObject = lambda: api.navigator
+
+
+def _setNavigatorObject(obj, isFocus=False):
+	# Like NVDA: the review cursor is forgotten, and document review may switch to object review.
+	api.navigator = obj
+	globalVars.reviewPosition = None
+	review.mode = "object"
+	return True
+
+
+def _setReviewPosition(pos, clearNavigatorObject=True):
+	globalVars.reviewPosition = pos
+	return True
+
+
+api.setNavigatorObject = _setNavigatorObject
+api.setReviewPosition = _setReviewPosition
 log = _Log()
 recogUi = _RecogUi()
 
@@ -163,6 +188,8 @@ _STUBS = {
 	"ui": _module("ui", message=_say),
 	"logHandler": _module("logHandler", log=log),
 	"api": api,
+	"globalVars": globalVars,
+	"review": review,
 	"winUser": _module("winUser", getCursorPos=lambda: list(_cursor), setCursorPos=_setCursorPos),
 	"mouseHandler": _module("mouseHandler", doPrimaryClick=lambda: mouse.append(("click", *_cursor))),
 	"core": _module("core", callLater=lambda ms, func, *args: later.append((ms, func, args))),
@@ -198,6 +225,9 @@ def rec(monkeypatch):
 	events.clear()
 	log.warnings.clear()
 	api.focus = None
+	api.navigator = "button"
+	globalVars.reviewPosition = "word in button"
+	review.mode = "document"
 	recogUi.__init__()
 	_FakeEngine.gate.clear()
 	_FakeEngine.built.clear()
@@ -454,3 +484,31 @@ def test_no_click_when_impossible(rec, foreground):
 	with pytest.raises(NotImplementedError):
 		info.activate()
 	assert mouse == []
+
+
+def _navigators():
+	return [value for kind, value in events if kind == "navigator"]
+
+
+def test_navigator_object_by_default(rec):
+	rec.PaddleOcr().recognizeFromCommand()
+	assert _navigators() == ["button"]
+
+
+def test_window_then_navigator_and_review_restored(rec):
+	rec.PaddleOcr().recognizeFromCommand("window")
+	assert _navigators() == ["window"]
+	assert api.navigator == "button"
+	assert globalVars.reviewPosition == "word in button"
+	assert review.mode == "document"
+
+
+def test_navigator_restored_when_capture_fails(rec, monkeypatch):
+	def fail(recognizer):
+		raise RuntimeError("capture failed")
+
+	monkeypatch.setattr(_STUBS["contentRecog"].recogUi, "recognizeNavigatorObject", fail)
+	with pytest.raises(RuntimeError):
+		rec.PaddleOcr().recognizeFromCommand("desktop")
+	assert api.navigator == "button"
+	assert globalVars.reviewPosition == "word in button"

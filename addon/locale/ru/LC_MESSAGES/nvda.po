@@ -27,6 +27,12 @@ msgstr "&Читать всё после распознавания"
 msgid "Recognizes the content of the current navigator object with Paddle OCR"
 msgstr "Распознаёт содержимое текущего объекта навигатора с помощью Paddle OCR"
 
+msgid "Recognizes the content of the foreground window with Paddle OCR"
+msgstr "Распознаёт содержимое активного окна с помощью Paddle OCR"
+
+msgid "Recognizes the whole screen with Paddle OCR"
+msgstr "Распознаёт весь экран с помощью Paddle OCR"
+
 msgid "Cycles the Paddle OCR recognition mode"
 msgstr "Переключает режим распознавания Paddle OCR"
 

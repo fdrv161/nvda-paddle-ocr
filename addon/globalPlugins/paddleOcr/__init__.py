@@ -5,6 +5,7 @@
 """Paddle OCR: recognizes screen text with PaddleOCR models, like NVDA+R with Windows OCR."""
 
 import addonHandler
+import api
 import config
 import globalPluginHandler
 import globalVars
@@ -103,11 +104,30 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		speakOnDemand=True,
 	)
 	def script_recognizeNavigatorObject(self, gesture):
+		self._recognize()
+
+	@script(
+		# Translators: Description of the command in the Input Gestures dialog.
+		description=_("Recognizes the content of the foreground window with Paddle OCR"),
+		speakOnDemand=True,
+	)
+	def script_recognizeForegroundWindow(self, gesture):
+		self._recognize(api.getForegroundObject())
+
+	@script(
+		# Translators: Description of the command in the Input Gestures dialog.
+		description=_("Recognizes the whole screen with Paddle OCR"),
+		speakOnDemand=True,
+	)
+	def script_recognizeScreen(self, gesture):
+		self._recognize(api.getDesktopObject())
+
+	def _recognize(self, obj=None):
 		from .recognizer import PaddleOcr
 
 		if self._recognizer is None:
 			self._recognizer = PaddleOcr()
-		self._recognizer.recognizeFromCommand()
+		self._recognizer.recognizeFromCommand(obj)
 
 	@script(
 		# Translators: Description of the command in the Input Gestures dialog.
