@@ -79,3 +79,6 @@ msgid ""
 msgstr ""
 "Предыдущее распознавание не закончилось за {seconds} секунд, начинаю "
 "заново. Если зависнет снова, перезапустите NVDA"
+
+msgid "The object is off the screen. Scroll to it or move it into view, then try again"
+msgstr "Объект за пределами экрана. Прокрутите к нему или сделайте его видимым и повторите"

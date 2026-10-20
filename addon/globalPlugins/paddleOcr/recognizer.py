@@ -231,6 +231,13 @@ class PaddleTextInfo(LwrTextInfo):
 	def activate(self):
 		self.click()
 
+	def _getBoundingRectFromOffset(self, offset):
+		# NVDA's version fails with AttributeError on an empty result (nothing recognized), which the
+		# NVDA highlighter logs as an error on every move; LookupError is what callers expect.
+		if not self.result.words:
+			raise LookupError("No words in the result")
+		return super()._getBoundingRectFromOffset(offset)
+
 	def click(self, kind="single"):
 		"""kind: "single", "double" or "right"."""
 		# The same checks as NVDA's own activate: NotImplementedError is what recogUi expects.
@@ -379,6 +386,20 @@ class PaddleOcr(ContentRecognizer):
 	def getResizeFactor(self, width, height):
 		# The engine picks the scale itself and returns coordinates in capture pixels.
 		return 1
+
+	def validateCaptureBounds(self, location):
+		"""An object entirely off the screen (scrolled out of view, a hidden menu) cannot be captured:
+		with Screen Curtain NVDA logs an error and says "Recognition failed", without it the result is empty
+		(nvaccess/nvda#20839). Say so before capturing."""
+		import api
+
+		left, top, width, height = location
+		sLeft, sTop, sWidth, sHeight = api.getDesktopObject().location
+		if left < sLeft + sWidth and left + width > sLeft and top < sTop + sHeight and top + height > sTop:
+			return True
+		# Translators: Spoken when the object to recognize is entirely outside the screen.
+		ui.message(_("The object is off the screen. Scroll to it or move it into view, then try again"))
+		return False
 
 	def recognize(self, pixels, imageInfo, onResult):
 		w, h = imageInfo.recogWidth, imageInfo.recogHeight

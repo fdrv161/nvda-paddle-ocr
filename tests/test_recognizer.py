@@ -133,6 +133,9 @@ class _LwrTextInfo:
 	def _getPointFromOffset(self, offset):
 		return self.result.points[offset]
 
+	def _getBoundingRectFromOffset(self, offset):
+		return "rect"
+
 
 # Stand-ins for the mouse: clicks and cursor moves in order, and callLater calls run by the test.
 mouse = []
@@ -552,3 +555,28 @@ def test_clipboard_image(rec):
 	done.clear()
 	assert rec.recognizeImage(b"rgb", None, 1, 1, onDone)
 	assert done.wait(WAIT)
+
+
+@pytest.mark.parametrize(
+	("location", "visible"),
+	[
+		((385, -201, 127, 22), False),  # above the screen: the case from the NVDA log
+		((2000, 100, 50, 20), False),  # right of the screen
+		((385, -10, 127, 22), True),  # partly on the screen
+		((100, 100, 200, 50), True),
+	],
+)
+def test_off_screen_object(rec, monkeypatch, location, visible):
+	desktop = types.SimpleNamespace(location=(0, 0, 1920, 1080))
+	monkeypatch.setattr(api, "getDesktopObject", lambda: desktop, raising=False)
+	assert rec.PaddleOcr().validateCaptureBounds(location) is visible
+	assert bool(_said()) is not visible
+
+
+def test_empty_result_has_no_rect(rec):
+	info = _textInfo(rec, 0)
+	assert info._getBoundingRectFromOffset(0) == "rect"
+	info.result.words = []
+	# The NVDA highlighter expects LookupError; NVDA's own version fails with AttributeError.
+	with pytest.raises(LookupError):
+		info._getBoundingRectFromOffset(0)
