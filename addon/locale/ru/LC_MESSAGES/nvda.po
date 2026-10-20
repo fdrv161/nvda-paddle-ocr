@@ -40,7 +40,7 @@ msgid "There is no image or image file on the clipboard"
 msgstr "В буфере обмена нет картинки или файла с картинкой"
 
 msgid "Recognition failed"
-msgstr "Не удалось распознать"
+msgstr "Распознавание не удалось"
 
 msgid "No text found"
 msgstr "Текст не найден"

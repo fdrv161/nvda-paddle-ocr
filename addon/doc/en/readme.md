@@ -5,7 +5,7 @@
 
 ## About the add-on
 
-Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R). The add-on uses compact PaddleOCR recognition models from Baidu that run locally. This engine usually reads more accurately, especially small fonts, text on dark backgrounds, and non-standard interfaces such as VST plugins. The result window and screen curtain behavior are the same as with Windows OCR.
+Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R). The add-on uses compact PaddleOCR recognition models from Baidu that run locally. This engine usually reads more accurately, especially small fonts, text on dark backgrounds, and non-standard interfaces such as VST plugins. The result window and screen curtain behavior are the same as with Windows OCR; in addition, the add-on can recognize the whole window, the whole screen or a picture on the clipboard, and clicks in the result window land in the middle of the word, with double and right clicks too.
 
 ## Requirements
 
@@ -51,12 +51,14 @@ NVDA menu: Preferences, Settings, "Paddle OCR" category.
 
 ## Privacy
 
-The add-on does not connect to the internet. Screenshots and recognized text are not sent anywhere and are not saved to disk. Only its settings are stored in the NVDA configuration. Only errors go into the NVDA log, and at the "debug" level also technical details: image size, recognition time, library versions.
+The add-on does not connect to the internet. Screenshots, clipboard pictures and recognized text are not sent anywhere and are not saved to disk. Only its settings are stored in the NVDA configuration. Only errors go into the NVDA log, and at the "debug" level also technical details: image size, recognition time, library versions.
 
 ## Limitations and nuances
 
 * Icons and interface frames are sometimes recognized as random characters like "x", "o", "+".
 * Short single words made of letters that are the same in both alphabets are sometimes read with the wrong letters.
+* A click in the result window moves the mouse pointer to the word and returns it about 0.3 seconds later. Clicks land correctly only while the recognized window is still in the same place on the screen.
+* Text on a button with a two-line label (for example, "Band" above "Solo") is read as two separate lines.
 
 ## Version history
 
