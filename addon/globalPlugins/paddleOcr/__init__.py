@@ -47,11 +47,15 @@ def _ourResult(obj):
 	return isinstance(obj, recogUi.RecogResultNVDAObject) and isinstance(obj.result, PaddleResult)
 
 
+class _ClipboardBusy(Exception):
+	"""Another program has the clipboard open right now."""
+
+
 def _clipboardImage():
 	"""A wx.Image from the clipboard: a copied picture or the first copied file if it is a picture.
-	None if there is neither."""
+	None if there is neither; _ClipboardBusy if the clipboard cannot be opened."""
 	if not wx.TheClipboard.Open():
-		return None
+		raise _ClipboardBusy
 	try:
 		# IsSupported first: GetData of a missing format makes wx log an error.
 		if wx.TheClipboard.IsSupported(wx.DataFormat(wx.DF_BITMAP)):
@@ -203,7 +207,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	def script_recognizeClipboardImage(self, gesture):
 		from .recognizer import recognizeImage
 
-		image = _clipboardImage()
+		try:
+			image = _clipboardImage()
+		except _ClipboardBusy:
+			# Translators: Spoken when another program holds the clipboard and it cannot be read.
+			ui.message(_("The clipboard is busy, try again in a moment"))
+			return
 		if image is None:
 			# Translators: Spoken when the clipboard has no picture to recognize.
 			ui.message(_("There is no image or image file on the clipboard"))

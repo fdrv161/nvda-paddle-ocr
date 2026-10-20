@@ -27,8 +27,10 @@ DET_THRESH = 0.2
 DET_BOX_THRESH = 0.45
 DET_UNCLIP_RATIO = 1.4
 DET_MIN_SIZE = 3
-# Images with a longer side above this are downscaled for the detector.
+# Images wider than this are downscaled for the detector.
 # Downscaling a screen hurts (small fonts vanish), so the limit is high: only for 8K and the like.
+# Only the width counts: the detector reads tall images in strips (DET_STRIP), so their memory does not grow,
+# and a long scrolled screenshot (1920 x 7560) downscaled by its height lost 7% of its words.
 DET_MAX_SIDE = 4000
 # Small images (a button, a label) get a margin of this many pixels for the detector: it often misses text
 # that touches the image edge. Measured on lines cut from screenshots: empty results 10–25% → ~1%.
@@ -150,7 +152,7 @@ class OcrEngine:
 
 	def _detect(self, bgr):
 		h, w = bgr.shape[:2]
-		scale = min(1.0, DET_MAX_SIDE / max(h, w))
+		scale = min(1.0, DET_MAX_SIDE / w)
 		# The model needs sides that are multiples of 32.
 		rh = max(32, round(h * scale / 32) * 32)
 		rw = max(32, round(w * scale / 32) * 32)
@@ -500,8 +502,14 @@ def rgbToBgr(rgb, alpha, width, height):
 	be black on black."""
 	img = np.frombuffer(rgb, dtype=np.uint8).reshape(height, width, 3)
 	if alpha is not None:
-		a = np.frombuffer(alpha, dtype=np.uint8).reshape(height, width, 1).astype(np.float32) / 255
-		img = (img * a + 255 * (1 - a) + 0.5).astype(np.uint8)
+		# In place, in 16-bit integers: float math on a 12-megapixel photo peaked at ~370 MB, this at ~160 MB.
+		a = np.frombuffer(alpha, dtype=np.uint8).reshape(height, width, 1).astype(np.uint16)
+		out = img.astype(np.uint16)
+		out *= a
+		a = 255 * (255 - a) + 127
+		out += a
+		out //= 255
+		img = out.astype(np.uint8)
 	return np.ascontiguousarray(img[:, :, ::-1])
 
 

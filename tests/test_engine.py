@@ -348,3 +348,13 @@ def test_clipboard_picture_to_bgr():
 	bgr = engine.rgbToBgr(rgb, alpha, 2, 1)
 	assert bgr.tolist() == [[[0, 0, 255], [255, 255, 255]]]
 	assert engine.rgbToBgr(rgb, None, 2, 1).tolist() == [[[0, 0, 255], [0, 0, 0]]]
+
+
+def test_long_screenshot_keeps_small_text(ocr):
+	# A long scrolled screenshot: before, its height alone made the detector shrink it threefold
+	# and small text vanished. Only the width counts now.
+	img = np.full((12000, 400, 3), 255, np.uint8)
+	for y in (100, 6000, 11800):
+		cv2.putText(img, "Settings", (5, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+	words = [w["text"] for line in ocr.recognize(img) for w in line]
+	assert words == ["Settings"] * 3

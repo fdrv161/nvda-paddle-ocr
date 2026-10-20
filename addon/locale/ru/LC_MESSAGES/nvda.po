@@ -82,3 +82,6 @@ msgstr ""
 
 msgid "The object is off the screen. Scroll to it or move it into view, then try again"
 msgstr "Объект за пределами экрана. Прокрутите к нему или сделайте его видимым и повторите"
+
+msgid "The clipboard is busy, try again in a moment"
+msgstr "Буфер обмена занят, повторите через мгновение"
