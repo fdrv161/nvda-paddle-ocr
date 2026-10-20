@@ -58,7 +58,7 @@ The add-on does not connect to the internet. Screenshots, clipboard pictures and
 * Icons and interface frames are sometimes recognized as random characters like "x", "o", "+".
 * Short single words made of letters that are the same in both alphabets are sometimes read with the wrong letters.
 * A click in the result window moves the mouse pointer to the word and returns it about 0.3 seconds later. Clicks land correctly only while the recognized window is still in the same place on the screen.
-* Text on a button with a two-line label (for example, "Band" above "Solo") is read as two separate lines.
+* If a button label takes two lines, each of them is read as a separate line of the result.
 
 ## Version history
 
