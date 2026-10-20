@@ -312,3 +312,30 @@ def test_pick_twin_script():
 	engine._pick_twin_script(items)
 	assert [x["text"] for ws in items for x in ws] == ["Copy", "Paste", "Все", "программы", "Type", "Edit"]
 	assert not any("alt" in x for ws in items for x in ws)
+
+
+def _piece(text, x, y, width, height):
+	return [{"x": x, "y": y, "width": width, "height": height, "text": text}]
+
+
+def test_stacked_rows_stay_apart():
+	# Windows Settings: a title, a switch label beside it that is taller than the title,
+	# and a description right under the title. The label stretched the title's line down to the
+	# description, which then joined it and was read first ("Description Title").
+	items = [
+		_piece("Title", 602, 490, 525, 23),
+		_piece("Off", 1649, 497, 40, 26),
+		_piece("Description", 601, 514, 938, 17),
+	]
+	lines = [" ".join(w["text"] for w in line) for line in engine._group_lines(items)]
+	assert lines == ["Title", "Off", "Description"]
+
+
+def test_row_of_different_heights_stays_one_line():
+	items = [
+		_piece("Big", 10, 100, 60, 30),
+		_piece("small", 80, 108, 40, 14),
+		_piece("next", 130, 104, 40, 20),
+	]
+	lines = [" ".join(w["text"] for w in line) for line in engine._group_lines(items)]
+	assert lines == ["Big small next"]

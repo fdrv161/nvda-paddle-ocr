@@ -630,6 +630,19 @@ def _db_boxes(pred, sx, sy, w, h, top=0):
 	return boxes
 
 
+def _stacked(a, b):
+	"""Two pieces one under the other: they share columns but barely share rows.
+	A line grows with every piece added, so a taller piece beside it (a switch label next to a title and
+	its description) stretches it down to the next row; without this check that row joined the line
+	and, sorted by x, was read before it."""
+	ax0, bx0 = a[0]["x"], b[0]["x"]
+	ax1, bx1 = a[-1]["x"] + a[-1]["width"], b[-1]["x"] + b[-1]["width"]
+	at, bt = a[0]["y"], b[0]["y"]
+	ah, bh = a[0]["height"], b[0]["height"]
+	rows = min(at + ah, bt + bh) - max(at, bt)
+	return min(ax1, bx1) > max(ax0, bx0) and rows <= 0.5 * min(ah, bh)
+
+
 def _group_lines(items):
 	"""Groups text pieces at the same height into one line, top to bottom and left to right."""
 	items.sort(key=lambda ws: ws[0]["y"] + ws[0]["height"] / 2)
@@ -639,9 +652,10 @@ def _group_lines(items):
 		bottom = top + ws[0]["height"]
 		if lines:
 			lt, lb, parts = lines[-1]
-			# Same line if the pieces overlap vertically by more than half of the smaller one.
+			# Same line if the pieces overlap vertically by more than half of the smaller one,
+			# and the piece is not under another piece of the line (see _stacked).
 			overlap = min(lb, bottom) - max(lt, top)
-			if overlap > 0.5 * min(lb - lt, bottom - top):
+			if overlap > 0.5 * min(lb - lt, bottom - top) and not any(_stacked(p, ws) for p in parts):
 				parts.append(ws)
 				lines[-1][0] = min(lt, top)
 				lines[-1][1] = max(lb, bottom)
