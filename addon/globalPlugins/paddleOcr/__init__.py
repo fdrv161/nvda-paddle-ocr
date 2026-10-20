@@ -47,6 +47,33 @@ def _ourResult(obj):
 	return isinstance(obj, recogUi.RecogResultNVDAObject) and isinstance(obj.result, PaddleResult)
 
 
+def _clipboardImage():
+	"""A wx.Image from the clipboard: a copied picture or the first copied file if it is a picture.
+	None if there is neither."""
+	if not wx.TheClipboard.Open():
+		return None
+	try:
+		# IsSupported first: GetData of a missing format makes wx log an error.
+		if wx.TheClipboard.IsSupported(wx.DataFormat(wx.DF_BITMAP)):
+			data = wx.BitmapDataObject()
+			if wx.TheClipboard.GetData(data):
+				image = data.GetBitmap().ConvertToImage()
+				return image if image.IsOk() else None
+		if wx.TheClipboard.IsSupported(wx.DataFormat(wx.DF_FILENAME)):
+			files = wx.FileDataObject()
+			if wx.TheClipboard.GetData(files):
+				for path in files.GetFilenames()[:1]:
+					# CanRead looks at the file without showing wx error messages for non-pictures.
+					if wx.Image.CanRead(path):
+						with wx.LogNull():
+							image = wx.Image(path)
+						if image.IsOk():
+							return image
+	finally:
+		wx.TheClipboard.Close()
+	return None
+
+
 class PaddleOcrPanel(SettingsPanel):
 	# Translators: Title of the Paddle OCR category in NVDA settings.
 	title = _("Paddle OCR")
@@ -167,6 +194,52 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		# Not in the foreground or nothing recognized: nothing to click, as with NVDA's Enter.
 		with contextlib.suppress(NotImplementedError):
 			obj.makeTextInfo(textInfos.POSITION_CARET).click(kind)
+
+	@script(
+		# Translators: Description of the command in the Input Gestures dialog.
+		description=_("Recognizes the image on the clipboard with Paddle OCR"),
+		speakOnDemand=True,
+	)
+	def script_recognizeClipboardImage(self, gesture):
+		from .recognizer import recognizeImage
+
+		image = _clipboardImage()
+		if image is None:
+			# Translators: Spoken when the clipboard has no picture to recognize.
+			ui.message(_("There is no image or image file on the clipboard"))
+			return
+		alpha = bytes(image.GetAlpha()) if image.HasAlpha() else None
+		started = recognizeImage(
+			bytes(image.GetData()),
+			alpha,
+			image.GetWidth(),
+			image.GetHeight(),
+			lambda result: wx.CallAfter(self._showClipboardText, result),
+		)
+		if not started:
+			# Translators: Spoken when the recognition command is pressed
+			# while a recognition is running.
+			ui.message(_("Recognition in progress"))
+
+	def _showClipboardText(self, result):
+		from .recognizer import MissingRuntimeError
+
+		if isinstance(result, MissingRuntimeError):
+			ui.message(result.spoken)
+		elif isinstance(result, Exception):
+			# Translators: Spoken when recognizing the clipboard image failed; details are in the NVDA log.
+			ui.message(_("Recognition failed"))
+		elif not result:
+			# Translators: Spoken when the clipboard image has no text.
+			ui.message(_("No text found"))
+		else:
+			ui.browseableMessage(
+				"\n".join(" ".join(word["text"] for word in line) for line in result),
+				# Translators: Title of the window with the text recognized in the clipboard image.
+				title=_("Paddle OCR: clipboard image"),
+				closeButton=True,
+				copyButton=True,
+			)
 
 	def _recognize(self, obj=None):
 		from .recognizer import PaddleOcr

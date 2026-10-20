@@ -104,6 +104,10 @@ class _FakeEngine:
 	def bgraToBgr(buf, w, h):
 		return buf
 
+	@staticmethod
+	def rgbToBgr(rgb, alpha, w, h):
+		return rgb
+
 	class OcrEngine:
 		def __init__(self, *args, allowed=None, **kwargs):
 			_FakeEngine.built.append(allowed)
@@ -527,3 +531,24 @@ def test_click_kinds(rec, monkeypatch, kind, clicks):
 	assert [m for m in mouse if m[0] != "move"] == [(c, 150, 205) for c in clicks]
 	_runLater(rec, monkeypatch, 1)
 	assert _cursor == [500, 600]
+
+
+def test_clipboard_image(rec):
+	done = threading.Event()
+	got = []
+
+	def onDone(result):
+		got.append(result)
+		done.set()
+
+	assert rec.recognizeImage(b"rgb", None, 1, 1, onDone)
+	# A second picture while the first one is recognized does not start.
+	assert not rec.recognizeImage(b"rgb", None, 1, 1, onDone)
+	_FakeEngine.gate.set()
+	assert done.wait(WAIT)
+	assert got == [["line"]]
+	assert "Loading OCR models" in _said()
+	# The lock is free again: the next picture starts.
+	done.clear()
+	assert rec.recognizeImage(b"rgb", None, 1, 1, onDone)
+	assert done.wait(WAIT)

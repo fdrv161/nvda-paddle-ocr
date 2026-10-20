@@ -494,6 +494,17 @@ def bgraToBgr(buf, width, height):
 	return np.frombuffer(buf, dtype=np.uint8).reshape(height, width, 4)[:, :, :3].copy()
 
 
+def rgbToBgr(rgb, alpha, width, height):
+	"""Picture from the clipboard (wx.Image: RGB bytes, alpha bytes or None) → BGR image for the engine.
+	Transparent parts become white: dark text on a transparent background would otherwise
+	be black on black."""
+	img = np.frombuffer(rgb, dtype=np.uint8).reshape(height, width, 3)
+	if alpha is not None:
+		a = np.frombuffer(alpha, dtype=np.uint8).reshape(height, width, 1).astype(np.float32) / 255
+		img = (img * a + 255 * (1 - a) + 0.5).astype(np.uint8)
+	return np.ascontiguousarray(img[:, :, ::-1])
+
+
 def _script(c):
 	"""The script of a character: 'latin', 'cyr' or None (digits, punctuation and others)."""
 	if not c.isalpha():

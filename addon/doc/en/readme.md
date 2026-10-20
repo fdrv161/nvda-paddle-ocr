@@ -19,6 +19,7 @@ There are no default hotkeys to avoid conflicts with other add-ons. You can assi
 
 * **Recognizes the content of the current navigator object with Paddle OCR.** Opens the result window: arrows move through the text, Enter clicks the middle of the word at the cursor, Shift+Enter double-clicks it, the Applications key or Shift+F10 right-clicks it, Escape closes the window.
 * **Recognizes the content of the foreground window with Paddle OCR** and **Recognizes the whole screen with Paddle OCR.** The same, but for the whole window or screen, without moving the navigator object first. The navigator object and the review cursor stay where they were.
+* **Recognizes the image on the clipboard with Paddle OCR.** Works with a copied picture (for example, an image copied in a browser or messenger) and with a copied picture file in File Explorer. The text opens in a window where you read it with the arrows; it has buttons to copy the text and to close the window, and Escape closes it too. There is nothing to click there: it is just a picture.
 * **Cycles the Paddle OCR recognition mode:** Latin or Cyrillic.
 * **Shows the Paddle OCR settings.**
 

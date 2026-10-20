@@ -262,6 +262,45 @@ class PaddleResult(LinesWordsResult):
 		return PaddleTextInfo(obj, position, self)
 
 
+def recognizeImage(rgb, alpha, width, height, onDone):
+	"""Recognizes a picture that is not on the screen (the clipboard) in a background thread.
+	rgb, alpha: as wx.Image gives them (alpha may be None). onDone(lines or exception) is called from
+	that thread. Returns False, starting nothing, while another recognition is running."""
+	if not _runLock.acquire(blocking=False):
+		return False
+	lang = getLanguage()
+	key = (lang, _charset(lang))
+	if _engine is None or _engineKey != key:
+		# Translators: Spoken once, while OCR models are loaded for the first recognition.
+		ui.message(_("Loading OCR models"))
+
+	def run():
+		try:
+			start = time.perf_counter()
+			eng = _getEngine(key)
+			loaded = time.perf_counter()
+			from . import engine
+
+			result = eng.recognize(engine.rgbToBgr(rgb, alpha, width, height))
+			# Numbers only, never the recognized text (see PaddleOcr._run).
+			log.debug(
+				f"Paddle OCR: clipboard, {key[0]} ({key[1]}), {width}x{height}, {len(result)} lines, "
+				f"loading {loaded - start:.2f} s, recognition {time.perf_counter() - loaded:.2f} s",
+			)
+		except MissingRuntimeError as e:
+			result = e
+		except Exception as e:
+			log.exception("Paddle OCR: clipboard recognition failed")
+			result = e
+		finally:
+			# Taken in the calling thread, released here: a plain Lock allows that.
+			_runLock.release()
+		onDone(result)
+
+	threading.Thread(target=run, name="paddleOcr", daemon=True).start()
+	return True
+
+
 class PaddleOcr(ContentRecognizer):
 	# recogUi reads these properties on every recognition, so settings take effect immediately.
 	@property

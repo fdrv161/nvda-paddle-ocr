@@ -33,6 +33,21 @@ msgstr "Распознаёт содержимое активного окна с
 msgid "Recognizes the whole screen with Paddle OCR"
 msgstr "Распознаёт весь экран с помощью Paddle OCR"
 
+msgid "Recognizes the image on the clipboard with Paddle OCR"
+msgstr "Распознаёт картинку из буфера обмена с помощью Paddle OCR"
+
+msgid "There is no image or image file on the clipboard"
+msgstr "В буфере обмена нет картинки или файла с картинкой"
+
+msgid "Recognition failed"
+msgstr "Не удалось распознать"
+
+msgid "No text found"
+msgstr "Текст не найден"
+
+msgid "Paddle OCR: clipboard image"
+msgstr "Paddle OCR: картинка из буфера обмена"
+
 msgid "Cycles the Paddle OCR recognition mode"
 msgstr "Переключает режим распознавания Paddle OCR"
 

@@ -339,3 +339,12 @@ def test_row_of_different_heights_stays_one_line():
 	]
 	lines = [" ".join(w["text"] for w in line) for line in engine._group_lines(items)]
 	assert lines == ["Big small next"]
+
+
+def test_clipboard_picture_to_bgr():
+	# Two pixels: opaque red, and fully transparent black, which must become white.
+	rgb = bytes([255, 0, 0, 0, 0, 0])
+	alpha = bytes([255, 0])
+	bgr = engine.rgbToBgr(rgb, alpha, 2, 1)
+	assert bgr.tolist() == [[[0, 0, 255], [255, 255, 255]]]
+	assert engine.rgbToBgr(rgb, None, 2, 1).tolist() == [[[0, 0, 255], [0, 0, 0]]]
