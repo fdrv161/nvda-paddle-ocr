@@ -191,7 +191,11 @@ _STUBS = {
 	"globalVars": globalVars,
 	"review": review,
 	"winUser": _module("winUser", getCursorPos=lambda: list(_cursor), setCursorPos=_setCursorPos),
-	"mouseHandler": _module("mouseHandler", doPrimaryClick=lambda: mouse.append(("click", *_cursor))),
+	"mouseHandler": _module(
+		"mouseHandler",
+		doPrimaryClick=lambda: mouse.append(("click", *_cursor)),
+		doSecondaryClick=lambda: mouse.append(("right", *_cursor)),
+	),
 	"core": _module("core", callLater=lambda ms, func, *args: later.append((ms, func, args))),
 	"contentRecog": _module(
 		"contentRecog",
@@ -512,3 +516,14 @@ def test_navigator_restored_when_capture_fails(rec, monkeypatch):
 		rec.PaddleOcr().recognizeFromCommand("desktop")
 	assert api.navigator == "button"
 	assert globalVars.reviewPosition == "word in button"
+
+
+@pytest.mark.parametrize(
+	("kind", "clicks"),
+	[("single", ["click"]), ("double", ["click", "click"]), ("right", ["right"])],
+)
+def test_click_kinds(rec, monkeypatch, kind, clicks):
+	_textInfo(rec, 5).click(kind)
+	assert [m for m in mouse if m[0] != "move"] == [(c, 150, 205) for c in clicks]
+	_runLater(rec, monkeypatch, 1)
+	assert _cursor == [500, 600]

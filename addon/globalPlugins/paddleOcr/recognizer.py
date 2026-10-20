@@ -229,6 +229,10 @@ class PaddleTextInfo(LwrTextInfo):
 	"""Enter in the result window clicks the middle of the word at the cursor."""
 
 	def activate(self):
+		self.click()
+
+	def click(self, kind="single"):
+		"""kind: "single", "double" or "right"."""
 		# The same checks as NVDA's own activate: NotImplementedError is what recogUi expects.
 		if not self.obj.isInForeground or not self.result.words:
 			raise NotImplementedError
@@ -245,7 +249,12 @@ class PaddleTextInfo(LwrTextInfo):
 			core.callLater(CLICK_SETTLE_MS, _returnMouse)
 		_lastClick = time.monotonic()
 		winUser.setCursorPos(point.x, point.y)
-		mouseHandler.doPrimaryClick()
+		if kind == "right":
+			mouseHandler.doSecondaryClick()
+		else:
+			mouseHandler.doPrimaryClick()
+			if kind == "double":
+				mouseHandler.doPrimaryClick()
 
 
 class PaddleResult(LinesWordsResult):

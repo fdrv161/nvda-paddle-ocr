@@ -17,7 +17,7 @@ Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R). The add-on us
 
 There are no default hotkeys to avoid conflicts with other add-ons. You can assign them in the NVDA menu: Preferences, Input Gestures, "Paddle OCR" category.
 
-* **Recognizes the content of the current navigator object with Paddle OCR.** Opens the result window: arrows move through the text, Enter clicks the middle of the word at the cursor, Escape closes the window.
+* **Recognizes the content of the current navigator object with Paddle OCR.** Opens the result window: arrows move through the text, Enter clicks the middle of the word at the cursor, Shift+Enter double-clicks it, the Applications key or Shift+F10 right-clicks it, Escape closes the window.
 * **Recognizes the content of the foreground window with Paddle OCR** and **Recognizes the whole screen with Paddle OCR.** The same, but for the whole window or screen, without moving the navigator object first. The navigator object and the review cursor stay where they were.
 * **Cycles the Paddle OCR recognition mode:** Latin or Cyrillic.
 * **Shows the Paddle OCR settings.**

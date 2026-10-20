@@ -4,20 +4,24 @@
 
 """Paddle OCR: recognizes screen text with PaddleOCR models, like NVDA+R with Windows OCR."""
 
+import contextlib
+
 import addonHandler
 import api
 import config
 import globalPluginHandler
 import globalVars
 import gui
+import textInfos
 import ui
 import wx
+from contentRecog import recogUi
 from gui import guiHelper
 from gui.settingsDialogs import NVDASettingsDialog, SettingsPanel
 from scriptHandler import script
 
 # recognizer.py is light: it loads the heavy libraries and models only on the first recognition.
-from .recognizer import LANGUAGES, getLanguage, languageName
+from .recognizer import LANGUAGES, PaddleResult, getLanguage, languageName
 
 addonHandler.initTranslation()
 
@@ -29,6 +33,18 @@ config.conf.spec["paddleOcr"] = {
 	"autoRefresh": "boolean(default=false)",
 	"autoSayAllOnResult": "boolean(default=true)",
 }
+
+# Keys of the add-on's result window, besides NVDA's own (Enter clicks, Escape closes). They are bound
+# only while that window has the focus, so these keys keep working as usual everywhere else.
+_RESULT_GESTURES = {
+	"kb:shift+enter": "doubleClickResult",
+	"kb:applications": "rightClickResult",
+	"kb:shift+f10": "rightClickResult",
+}
+
+
+def _ourResult(obj):
+	return isinstance(obj, recogUi.RecogResultNVDAObject) and isinstance(obj.result, PaddleResult)
 
 
 class PaddleOcrPanel(SettingsPanel):
@@ -94,6 +110,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 		NVDASettingsDialog.categoryClasses.append(PaddleOcrPanel)
 
 	def terminate(self):
+		self._bindResultGestures(False)
 		if PaddleOcrPanel in NVDASettingsDialog.categoryClasses:
 			NVDASettingsDialog.categoryClasses.remove(PaddleOcrPanel)
 		super().terminate()
@@ -121,6 +138,35 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 	)
 	def script_recognizeScreen(self, gesture):
 		self._recognize(api.getDesktopObject())
+
+	def event_gainFocus(self, obj, nextHandler):
+		self._bindResultGestures(_ourResult(obj))
+		nextHandler()
+
+	def _bindResultGestures(self, bind):
+		for gesture, scriptName in _RESULT_GESTURES.items():
+			if bind:
+				self.bindGesture(gesture, scriptName)
+			else:
+				with contextlib.suppress(LookupError):
+					self.removeGestureBinding(gesture)
+
+	# No descriptions: these work only in the result window, like NVDA's own Enter there.
+	def script_doubleClickResult(self, gesture):
+		self._clickResult("double", gesture)
+
+	def script_rightClickResult(self, gesture):
+		self._clickResult("right", gesture)
+
+	def _clickResult(self, kind, gesture):
+		obj = api.getFocusObject()
+		if not _ourResult(obj):
+			# The focus has just left the result window: the key does what it usually does.
+			gesture.send()
+			return
+		# Not in the foreground or nothing recognized: nothing to click, as with NVDA's Enter.
+		with contextlib.suppress(NotImplementedError):
+			obj.makeTextInfo(textInfos.POSITION_CARET).click(kind)
 
 	def _recognize(self, obj=None):
 		from .recognizer import PaddleOcr
