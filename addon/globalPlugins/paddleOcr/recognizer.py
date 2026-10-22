@@ -4,6 +4,7 @@
 
 """Recognizer for NVDA: takes a capture from contentRecog and returns a LinesWordsResult."""
 
+import bisect
 import ctypes
 import os
 import sys
@@ -226,17 +227,34 @@ def _withNavigator(obj, func):
 
 
 class PaddleTextInfo(LwrTextInfo):
-	"""Enter in the result window clicks the middle of the word at the cursor."""
+	"""Enter in the result window clicks the middle of the word at the cursor; the position of the cursor
+	(NVDA+NumpadDivide moves the mouse there) is the character, not the whole word."""
 
 	def activate(self):
 		self.click()
 
-	def _getBoundingRectFromOffset(self, offset):
+	def _wordRect(self, offset):
 		# NVDA's version fails with AttributeError on an empty result (nothing recognized), which the
 		# NVDA highlighter logs as an error on every move; LookupError is what callers expect.
 		if not self.result.words:
 			raise LookupError("No words in the result")
 		return super()._getBoundingRectFromOffset(offset)
+
+	def _getBoundingRectFromOffset(self, offset):
+		rect = self._wordRect(offset)
+		edges, start = self.result.charEdgesAt(offset)
+		# A space between words, or a word without character positions: the whole word, as NVDA does.
+		if edges is None or not 0 <= offset - start < len(edges) - 1:
+			return rect
+		from locationHelper import RectLTRB
+
+		i = offset - start
+		return RectLTRB(edges[i], rect.top, max(edges[i + 1], edges[i] + 1), rect.bottom)
+
+	def _get_pointAtStart(self):
+		# NVDA takes the top left corner of the rect, which in dense text is often on the line above;
+		# the middle of the character is on it.
+		return self._getBoundingRectFromOffset(self._startOffset).center
 
 	def click(self, kind="single"):
 		"""kind: "single", "double" or "right"."""
@@ -248,9 +266,9 @@ class PaddleTextInfo(LwrTextInfo):
 		import winUser
 
 		global _mouseHome, _lastClick
-		# NVDA clicks pointAtStart, the top left corner of the word. On small buttons, links and dense lists
-		# that corner is often just outside the element or on the line above; the middle is inside.
-		point = self._getPointFromOffset(self.bookmark.startOffset)
+		# The middle of the word, not of the character at the cursor: on small buttons, links and dense
+		# lists the middle is surely inside the element.
+		point = self._wordRect(self.bookmark.startOffset).center
 		if _mouseHome is None:
 			_mouseHome = tuple(winUser.getCursorPos())
 			core.callLater(CLICK_SETTLE_MS, _returnMouse)
@@ -265,6 +283,25 @@ class PaddleTextInfo(LwrTextInfo):
 
 
 class PaddleResult(LinesWordsResult):
+	def __init__(self, data, imageInfo):
+		super().__init__(data, imageInfo)
+		# For each word of self.words (NVDA makes them in the same order): where its characters start
+		# on the screen plus its end, or None if the engine gave none or they do not match the text.
+		self._charEdges = [
+			[imageInfo.convertXToScreen(x) for x in word["charEdges"]]
+			if len(word.get("charEdges", ())) == len(word["text"]) + 1
+			else None
+			for line in data
+			for word in line
+		]
+		self._wordStarts = [word.offset for word in self.words]
+
+	def charEdgesAt(self, offset):
+		"""(character edges of the word at offset or None, the word's start offset)."""
+		# The last word starting at or before offset, as NVDA picks it.
+		i = max(0, bisect.bisect_right(self._wordStarts, offset) - 1)
+		return self._charEdges[i], self._wordStarts[i]
+
 	def makeTextInfo(self, obj, position):
 		return PaddleTextInfo(obj, position, self)
 

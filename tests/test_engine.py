@@ -86,6 +86,20 @@ def test_word_positions(ocr, size):
 		(tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1.2 * k, max(1, int(2 * k)))
 		assert x * k <= cx <= x * k + tw
 		assert y * k - th <= cy <= y * k + th * 0.3
+		# Character positions: one more than the characters, left to right, inside the word.
+		edges = wd["charEdges"]
+		assert len(edges) == len(text) + 1
+		assert edges[0] == wd["x"] and edges[-1] == wd["x"] + wd["width"]
+		assert edges == sorted(edges)
+		# The middle of each character falls on that character, give or take half a character:
+		# the mouse is put there with NVDA+NumpadDivide.
+		half = tw / len(text) / 2
+		font = (cv2.FONT_HERSHEY_SIMPLEX, 1.2 * k, max(1, int(2 * k)))
+		for i in range(len(text)):
+			(start, _h), _ = cv2.getTextSize(text[:i], *font)
+			(end, _h), _ = cv2.getTextSize(text[: i + 1], *font)
+			mid = (edges[i] + edges[i + 1]) / 2
+			assert x * k + start - half <= mid <= x * k + end + half, (text, i, edges)
 
 
 @pytest.mark.parametrize("text", ["Settings", "Cancel", "Open file"])

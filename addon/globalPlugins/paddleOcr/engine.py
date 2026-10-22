@@ -130,7 +130,7 @@ class OcrEngine:
 		self._rec = Reader(recPath, recYml, threads, allowed)
 
 	def recognize(self, bgr):
-		"""Returns a list of lines; a line is a list of words {x, y, width, height, text}."""
+		"""Returns a list of lines; a line is a list of words {x, y, width, height, text, charEdges}."""
 		h, w = bgr.shape[:2]
 		if min(h, w) < DET_PAD_BELOW:
 			p = DET_PAD
@@ -285,12 +285,22 @@ class Reader:
 					cur = self._fix_mixed_script(cur, prob)
 					wx0 = x0 + int(cur[0][1] * toBox)
 					wx1 = min(x1, x0 + math.ceil((cur[-1][1] + 1) * toBox))
+					# Where each character starts, plus the word's end: a character ends halfway between
+					# the CTC steps where it and the next one were read. Approximate (a step is 2-3 screen
+					# pixels), but enough to put the mouse on a character. Kept monotonic and inside the word.
+					edges = [wx0]
+					for (_c, ta), (_d, tb) in itertools.pairwise(cur):
+						edges.append(min(wx1, max(edges[-1], x0 + int((ta + tb + 1) / 2 * toBox))))
+					edges.append(max(edges[-1], wx0 + max(1, wx1 - wx0)))
 					word = {
 						"x": wx0,
 						"y": y0,
 						"width": max(1, wx1 - wx0),
 						"height": y1 - y0,
 						"text": _fix_case(_fix_il("".join(c for c, _t in cur))),
+						# One more than the characters of the text; the result checks this, since a text fix
+						# could change the length (upper() of "ß" is "SS").
+						"charEdges": edges,
 					}
 					alt = self._twin_spelling(cur, prob)
 					if alt:

@@ -89,7 +89,20 @@ def _pixels():
 
 
 def _imageInfo():
-	return types.SimpleNamespace(recogWidth=4, recogHeight=3)
+	# The capture is at the top left corner of the screen, so its pixels are screen pixels.
+	same = lambda value: value  # noqa: E731
+	return types.SimpleNamespace(
+		recogWidth=4,
+		recogHeight=3,
+		convertXToScreen=same,
+		convertYToScreen=same,
+		convertWidthToScreen=same,
+		convertHeightToScreen=same,
+	)
+
+
+# What the fake engine reads: one line of one word.
+LINE = [{"x": 1, "y": 1, "width": 2, "height": 1, "text": "line"}]
 
 
 class _FakeEngine:
@@ -114,27 +127,58 @@ class _FakeEngine:
 
 		def recognize(self, bgr):
 			assert _FakeEngine.gate.wait(WAIT)
-			return ["line"]
+			return [LINE]
+
+
+class _Rect:
+	"""Stand-in for locationHelper.RectLTRB."""
+
+	def __init__(self, left, top, right, bottom):
+		self.left, self.top, self.right, self.bottom = left, top, right, bottom
+
+	@property
+	def center(self):
+		x, y = round((self.left + self.right) / 2), round((self.top + self.bottom) / 2)
+		return types.SimpleNamespace(x=x, y=y)
+
+	def __eq__(self, other):
+		return vars(self) == vars(other)
 
 
 class _LinesWordsResult:
+	"""NVDA 2026.3 contentRecog.LinesWordsResult: words with their start offsets, a space between them."""
+
 	def __init__(self, data, imageInfo):
 		self.data = data
-		self.words = list(data)
-		# Screen points of the words' middles, by offset: what NVDA's OffsetsTextInfo computes.
-		self.points = {}
+		self.words = []
+		offset = 0
+		for line in data:
+			for i, word in enumerate(line):
+				offset += i > 0
+				box = {"left": word["x"], "top": word["y"], "width": word["width"], "height": word["height"]}
+				self.words.append(types.SimpleNamespace(offset=offset, **box))
+				offset += len(word["text"])
+			offset += 1
 
 
 class _LwrTextInfo:
+	"""NVDA 2026.3 LwrTextInfo: the rect of an offset is its word's rect; a point is the rect's middle."""
+
 	def __init__(self, obj, position, result):
 		self.obj, self.result = obj, result
+		self._startOffset = position
 		self.bookmark = types.SimpleNamespace(startOffset=position)
 
 	def _getPointFromOffset(self, offset):
-		return self.result.points[offset]
+		return self._getBoundingRectFromOffset(offset).center
 
 	def _getBoundingRectFromOffset(self, offset):
-		return "rect"
+		word = None
+		for nextWord in self.result.words:
+			if nextWord.offset > offset:
+				break
+			word = nextWord
+		return _Rect(word.left, word.top, word.left + word.width, word.top + word.height)
 
 
 # Stand-ins for the mouse: clicks and cursor moves in order, and callLater calls run by the test.
@@ -204,6 +248,7 @@ _STUBS = {
 		doSecondaryClick=lambda: mouse.append(("right", *_cursor)),
 	),
 	"core": _module("core", callLater=lambda ms, func, *args: later.append((ms, func, args))),
+	"locationHelper": _module("locationHelper", RectLTRB=_Rect),
 	"contentRecog": _module(
 		"contentRecog",
 		ContentRecognizer=object,
@@ -274,7 +319,7 @@ def test_second_press_keeps_running(rec):
 	assert _said() == ["Recognizing", "Loading OCR models", "Recognition in progress"]
 	_FakeEngine.gate.set()
 	assert recogUi.done.wait(WAIT)
-	assert [r.data for r in _results()] == [["line"]]
+	assert [r.data for r in _results()] == [[LINE]]
 	assert ocr.pending() is None
 
 
@@ -447,9 +492,13 @@ def test_library_outside_addon_is_logged(rec, monkeypatch):
 	assert "onnxruntime" in log.warnings[0]
 
 
-def _textInfo(rec, offset, foreground=True):
-	result = rec.PaddleResult(["word"], _imageInfo())
-	result.points = {0: types.SimpleNamespace(x=110, y=205), 5: types.SimpleNamespace(x=150, y=205)}
+def _textInfo(rec, offset, foreground=True, edges=None):
+	"""A result of one line "word next": the middles of the words are (110, 205) and (150, 205)."""
+	word = {"x": 100, "y": 200, "width": 20, "height": 10, "text": "word"}
+	if edges is not None:
+		word["charEdges"] = edges
+	nextWord = {"x": 140, "y": 200, "width": 20, "height": 10, "text": "next"}
+	result = rec.PaddleResult([[word, nextWord]], _imageInfo())
 	obj = types.SimpleNamespace(isInForeground=foreground)
 	return result.makeTextInfo(obj, offset)
 
@@ -549,7 +598,7 @@ def test_clipboard_image(rec):
 	assert not rec.recognizeImage(b"rgb", None, 1, 1, onDone)
 	_FakeEngine.gate.set()
 	assert done.wait(WAIT)
-	assert got == [["line"]]
+	assert got == [[LINE]]
 	assert "Loading OCR models" in _said()
 	# The lock is free again: the next picture starts.
 	done.clear()
@@ -575,8 +624,29 @@ def test_off_screen_object(rec, monkeypatch, location, visible):
 
 def test_empty_result_has_no_rect(rec):
 	info = _textInfo(rec, 0)
-	assert info._getBoundingRectFromOffset(0) == "rect"
+	assert info._getBoundingRectFromOffset(0) == _Rect(100, 200, 120, 210)
 	info.result.words = []
 	# The NVDA highlighter expects LookupError; NVDA's own version fails with AttributeError.
 	with pytest.raises(LookupError):
 		info._getBoundingRectFromOffset(0)
+
+
+def test_cursor_position_is_the_character(rec, monkeypatch):
+	edges = [100, 104, 109, 114, 120]
+	info = _textInfo(rec, 1, edges=edges)
+	# NVDA+NumpadDivide puts the mouse on the middle of the "o" of "word"...
+	assert info._getBoundingRectFromOffset(1) == _Rect(104, 200, 109, 210)
+	assert vars(info._get_pointAtStart()) == {"x": 106, "y": 205}
+	assert info._getPointFromOffset(3).x == 117
+	# ...but Enter still clicks the middle of the word.
+	info.activate()
+	assert mouse[-1] == ("click", 110, 205)
+	# The space after the word and a word without character positions: the whole word, as in NVDA.
+	assert info._getBoundingRectFromOffset(4) == _Rect(100, 200, 120, 210)
+	assert info._getBoundingRectFromOffset(6) == _Rect(140, 200, 160, 210)
+
+
+def test_character_positions_must_match_text(rec):
+	# A text fix changed the length of the word: its character positions are not used.
+	info = _textInfo(rec, 1, edges=[100, 110, 120])
+	assert info._getBoundingRectFromOffset(1) == _Rect(100, 200, 120, 210)
