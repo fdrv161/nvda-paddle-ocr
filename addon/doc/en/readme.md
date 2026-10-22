@@ -5,7 +5,7 @@
 
 ## About the add-on
 
-Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R). The add-on uses compact PaddleOCR recognition models from Baidu that run locally. This engine usually reads more accurately, especially small fonts, text on dark backgrounds, and non-standard interfaces such as VST plugins. The result window and screen curtain behavior are the same as with Windows OCR; in addition, the add-on can recognize the whole window, the whole screen or a picture on the clipboard, and clicks in the result window land in the middle of the word, with double and right clicks too.
+Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R). The add-on uses compact PaddleOCR recognition models from Baidu that run locally. This engine usually recognizes more accurately, especially small fonts, text on dark backgrounds, and non-standard interfaces such as VST plugins. The result window and screen curtain behavior are the same as with Windows OCR; in addition, the add-on can recognize the whole window, the whole screen or a picture on the clipboard, and clicks in the result window land in the middle of the word, with double and right clicks too; the mouse can also be put on a single character.
 
 ## Requirements
 
@@ -18,7 +18,7 @@ Paddle OCR is an alternative to the built-in Windows OCR (NVDA+R). The add-on us
 There are no default hotkeys to avoid conflicts with other add-ons. You can assign them in the NVDA menu: Preferences, Input Gestures, "Paddle OCR" category.
 
 * **Recognizes the content of the current navigator object with Paddle OCR.** Opens the result window: arrows move through the text, Enter clicks the middle of the word at the cursor, Shift+Enter double-clicks it, the Applications key or Shift+F10 right-clicks it, Escape closes the window. NVDA's "Move mouse to navigator object" command (NVDA+numpad slash) puts the mouse on the middle of the character at the cursor.
-* **Recognizes the content of the foreground window with Paddle OCR** and **Recognizes the whole screen with Paddle OCR.** The same, but for the whole window or screen, without moving the navigator object first. The navigator object and the review cursor stay where they were.
+* **Recognizes the content of the foreground window with Paddle OCR** and **Recognizes the whole screen with Paddle OCR.** The same, but for the whole window or screen.
 * **Recognizes the image on the clipboard with Paddle OCR.** Works with a copied picture (for example, an image copied in a browser or messenger) and with a copied picture file in File Explorer. The text opens in a window where you read it with the arrows; it has buttons to copy the text and to close the window, and Escape closes it too. There is nothing to click there: it is just a picture.
 * **Cycles the Paddle OCR recognition mode:** Latin or Cyrillic.
 * **Shows the Paddle OCR settings.**
@@ -51,13 +51,14 @@ NVDA menu: Preferences, Settings, "Paddle OCR" category.
 
 ## Privacy
 
-The add-on does not connect to the internet. Screenshots, clipboard pictures and recognized text are not sent anywhere and are not saved to disk. Only its settings are stored in the NVDA configuration. Only errors go into the NVDA log, and at the "debug" level also technical details: image size, recognition time, library versions.
+The add-on does not connect to the internet. Screenshots, clipboard pictures and recognized text are not sent anywhere and are not saved to disk. Only its settings are stored in the NVDA configuration. Only errors go into the NVDA log, and at the "debug" level also technical details: image size, recognition time and library versions.
 
 ## Limitations and nuances
 
 * Icons and interface frames are sometimes recognized as random characters like "x", "o", "+".
 * Short single words made of letters that are the same in both alphabets are sometimes read with the wrong letters.
 * A click in the result window moves the mouse pointer to the word and returns it about 0.3 seconds later. Clicks land correctly only while the recognized window is still in the same place on the screen.
+* The place of a character is approximate: now and then NVDA+numpad slash puts the mouse on the neighbouring character. The command follows the cursor of the result window only while the navigator object is in it: after NVDA+numpad multiply (move navigator to mouse) it uses the old place until you press NVDA+numpad minus (move navigator to focus).
 * If a button label takes two lines, each of them is read as a separate line of the result.
 
 ## Version history
