@@ -59,6 +59,9 @@ REC_MAX_RATIO = 320
 REC_MIN_SCORE = 0.5
 # Pieces at the same height separated by more than this many line heights are separate lines (columns).
 LINE_GAP = 10
+# With reuse=True the engine keeps a copy of an image up to this many pixels until the next one,
+# to compare them (3 bytes per pixel: 6 MB for 1080p, 25 MB for 4K); larger pictures are not kept.
+REUSE_MAX_PIXELS = 3840 * 2160
 
 _DET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 _DET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
@@ -121,36 +124,81 @@ def _run_options():
 	return opts
 
 
-class OcrEngine:
-	"""Detector + recognizer. allowed(c) tells which characters the recognizer may output (None means all)."""
+class _Seen:
+	"""The previous image of an OcrEngine with reuse=True and what was found on it."""
 
-	def __init__(self, detPath, recPath, recYml, threads=0, allowed=None):
+	def __init__(self, bgr, parts, boxes, reads, lines):
+		self.bgr = bgr
+		self.parts = parts  # detector strips (see _join_strips); None for small images
+		self.boxes = boxes
+		self.reads = reads  # Reader.read results for boxes, untouched by the text fixes that follow it
+		self.lines = lines
+
+
+class OcrEngine:
+	"""Detector + recognizer. allowed(c) tells which characters the recognizer may output (None means all).
+
+	reuse: parts of an image that are the same as in the previous image of the same size are not
+	recognized again (NVDA's auto refresh asks for the same place every 1.5 s).
+	"""
+
+	def __init__(self, detPath, recPath, recYml, threads=0, allowed=None, reuse=False):
 		self._det = _session(detPath, threads, oneShot=True)
 		self._detInput = self._det.get_inputs()[0].name
 		self._rec = Reader(recPath, recYml, threads, allowed)
+		self._reuse = reuse
+		self._seen = None
 
 	def recognize(self, bgr):
 		"""Returns a list of lines; a line is a list of words {x, y, width, height, text, charEdges}."""
 		h, w = bgr.shape[:2]
+		# Taken away first: after a failed run the next one starts from scratch.
+		prev, self._seen = self._seen, None
+		diff = None
+		if prev is not None and prev.bgr.shape == bgr.shape:
+			# Non-zero where the image changed, the three channels of a pixel side by side.
+			diff = cv2.absdiff(prev.bgr, bgr).reshape(h, w * 3)
+			if not cv2.countNonZero(diff):
+				self._seen = prev
+				return _copy_lines(prev.lines)
+		else:
+			prev = None
+		parts = None
 		if min(h, w) < DET_PAD_BELOW:
 			p = DET_PAD
-			boxes = self._detect(_add_margin(bgr, p))
+			boxes, _parts = self._detect(_add_margin(bgr, p))
 			# Back to the coordinates of the original image; the recognizer reads lines from it.
 			boxes = [
 				(max(0, x0 - p), max(0, y0 - p), min(w, x1 - p), min(h, y1 - p)) for x0, y0, x1, y1 in boxes
 			]
 			boxes = [b for b in boxes if b[2] - b[0] >= 2 and b[3] - b[1] >= 2]
 		else:
-			boxes = self._detect(bgr)
-		if not boxes:
-			return []
-		items = [words for words, score in self._rec.read(bgr, boxes) if words and score >= REC_MIN_SCORE]
+			rowsChanged = None if prev is None else cv2.reduce(diff, 1, cv2.REDUCE_MAX).ravel() > 0
+			boxes, parts = self._detect(bgr, None if prev is None else (rowsChanged, prev.parts))
+		kept = []
+		if prev is not None:
+			old, new = _changed_groups(prev.boxes, boxes, diff)
+			kept = [(prev.boxes[i], prev.reads[i]) for i in old]
+			boxes = [boxes[i] for i in new]
+		reads = [read for _box, read in kept] + self._rec.read(bgr, boxes)
+		boxes = [box for box, _read in kept] + boxes
+		# Copies: the text fixes change the words, and the reads may be used again.
+		items = [_copy_words(words) for words, score in reads if words and score >= REC_MIN_SCORE]
 		_pick_twin_script(items)
-		return _group_lines(items)
+		lines = _group_lines(items)
+		if self._reuse and h * w <= REUSE_MAX_PIXELS:
+			# A copy: the caller may change its array, and a changed image must not look unchanged.
+			self._seen = _Seen(bgr.copy(), parts, boxes, reads, _copy_lines(lines))
+		return lines
 
 	# --- detector ---
 
-	def _detect(self, bgr):
+	def _detect(self, bgr, reuse=None):
+		"""Returns (boxes, strips).
+
+		reuse: (for each row of the image whether it changed, the strips of the previous image
+		of this size); strips without changed rows are taken from it instead of running the detector.
+		"""
 		h, w = bgr.shape[:2]
 		scale = min(1.0, DET_MAX_SIDE / w)
 		# The model needs sides that are multiples of 32.
@@ -159,7 +207,13 @@ class OcrEngine:
 		img = cv2.resize(bgr, (rw, rh)) if (rw, rh) != (w, h) else bgr
 		sy = h / rh
 		parts = []
-		for top, bottom, s0, s1 in _strips(rh):
+		for k, (top, bottom, s0, s1) in enumerate(_strips(rh)):
+			if reuse is not None:
+				rowsChanged, oldParts = reuse
+				# The rows of the image this strip is resized from; the resize also reads a row past each end.
+				if not rowsChanged[max(0, math.floor(s0 * sy) - 1) : math.ceil(s1 * sy) + 1].any():
+					parts.append(oldParts[k])
+					continue
 			# (pixel/255 - mean)/std per channel straight into the 1×3×h×w layout: no intermediate float
 			# copies of the whole image, which is noticeable on a 1080p screen.
 			x = np.empty((1, 3, s1 - s0, rw), dtype=np.float32)
@@ -169,7 +223,7 @@ class OcrEngine:
 			pred = self._det.run(None, {self._detInput: x})[0][0, 0]
 			del x
 			parts.append((top * sy, bottom * sy, s0 * sy, s1 * sy, _db_boxes(pred, w / rw, sy, w, h, s0)))
-		return _join_strips(parts, DET_OVERLAP / 2 * sy)
+		return _join_strips(parts, DET_OVERLAP / 2 * sy), parts
 
 
 class Reader:
@@ -623,6 +677,51 @@ def _join_strips(parts, margin):
 				by1 = y1
 			boxes.append((bx0, by0, bx1, by1))
 	return boxes
+
+
+def _changed_groups(old, new, diff):
+	"""After a partial change of the image: (indices of old boxes to keep with their text,
+	indices of new boxes to read).
+
+	A change anywhere in a detector strip moves the other boxes of the strip by a pixel (the detector looks
+	at the whole strip), and lines whose pixels did not change would be read a little differently: NVDA's
+	auto refresh would speak them as new text. So old and new boxes that overlap (shared columns and at
+	least half the rows of the lower box) form groups: a group without a changed pixel in any of its boxes
+	keeps its old boxes, otherwise its new boxes are read.
+	diff: rows × (columns × 3), non-zero where the image changed.
+	"""
+	boxes = np.array([*old, *new], dtype=np.int32).reshape(-1, 4)
+	x0, y0, x1, y1 = boxes.T
+	dx = np.minimum.outer(x1, x1) - np.maximum.outer(x0, x0)
+	dy = np.minimum.outer(y1, y1) - np.maximum.outer(y0, y0)
+	linked = (dx > 0) & (2 * dy >= np.minimum.outer(y1 - y0, y1 - y0))
+	group = list(range(len(boxes)))
+
+	def root(i):
+		while group[i] != i:
+			group[i] = group[group[i]]
+			i = group[i]
+		return i
+
+	for i, j in zip(*np.nonzero(np.triu(linked, 1)), strict=True):
+		group[root(int(j))] = root(int(i))
+	changed = set()
+	for i, (bx0, by0, bx1, by1) in enumerate(boxes.tolist()):
+		if diff[by0:by1, 3 * bx0 : 3 * bx1].any():
+			changed.add(root(i))
+	n = len(old)
+	return (
+		[i for i in range(n) if root(i) not in changed],
+		[i - n for i in range(n, len(boxes)) if root(i) in changed],
+	)
+
+
+def _copy_words(words):
+	return [{**w, "charEdges": list(w["charEdges"])} for w in words]
+
+
+def _copy_lines(lines):
+	return [_copy_words(line) for line in lines]
 
 
 def _db_boxes(pred, sx, sy, w, h, top=0):

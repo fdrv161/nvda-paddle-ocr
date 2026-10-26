@@ -46,7 +46,7 @@ NVDA menu: Preferences, Settings, "Paddle OCR" category.
 
 * **Recognition mode:** follow NVDA language, Latin or Cyrillic.
 * **Letters of all Cyrillic alphabets in the Cyrillic mode:** for languages other than Russian, Ukrainian, Belarusian and Bulgarian. Disabled by default.
-* **Periodically refresh recognized content:** the result window re-reads itself while open. It loads the processor, so it is disabled by default.
+* **Periodically refresh recognized content:** while the result window is open, it re-reads itself about every 1.5 seconds and NVDA speaks new text. Only what changed on the screen is read again, so a still screen hardly loads the processor. Disabled by default.
 * **Automatically say all when recognition finishes:** text is spoken immediately after recognition. Enabled by default.
 
 ## Privacy

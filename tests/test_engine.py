@@ -33,6 +33,116 @@ def ocr():
 	)
 
 
+@pytest.fixture(scope="module")
+def _reusingEngine():
+	if not (MODELS / "rec_cyrillic_v5").is_dir():
+		pytest.skip("No models in the add-on: run tools/fetch_libs.py")
+	rec = MODELS / "rec_cyrillic_v5"
+	return engine.OcrEngine(
+		MODELS / "det_v6_tiny" / "inference.onnx",
+		rec / "inference.onnx",
+		rec / "inference.yml",
+		allowed=engine.eastSlavicOnly,
+		reuse=True,
+	)
+
+
+@pytest.fixture
+def reusing(_reusingEngine, monkeypatch):
+	"""An engine with reuse=True that has seen nothing yet; counts detector strips and lines it reads."""
+	_reusingEngine._seen = None
+	runs = {"strips": 0, "lines": 0}
+	det, read = _reusingEngine._det, _reusingEngine._rec.read
+
+	class Det:
+		def run(self, *args):
+			runs["strips"] += 1
+			return det.run(*args)
+
+	def countingRead(bgr, boxes):
+		runs["lines"] += len(boxes)
+		return read(bgr, boxes)
+
+	monkeypatch.setattr(_reusingEngine, "_det", Det())
+	monkeypatch.setattr(_reusingEngine._rec, "read", countingRead)
+	_reusingEngine.runs = runs
+	yield _reusingEngine
+	_reusingEngine._seen = None
+
+
+def _put(img, text, x, y):
+	cv2.putText(img, text, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 2)
+
+
+def test_reuse_same_image(reusing):
+	img = np.full((1080, 1920, 3), 255, np.uint8)
+	_put(img, "Settings", 100, 200)
+	first = reusing.recognize(img)
+	assert [wd["text"] for line in first for wd in line] == ["Settings"]
+	reusing.runs.update(strips=0, lines=0)
+	# The same picture again (as auto refresh gives it): the previous result, nothing is run.
+	assert reusing.recognize(img.copy()) == first
+	assert reusing.runs == {"strips": 0, "lines": 0}
+
+
+def test_reuse_reads_only_changes(reusing):
+	img = np.full((1080, 1920, 3), 255, np.uint8)
+	# One word in each of the three detector strips of a 1080p screen.
+	_put(img, "Settings", 100, 200)
+	_put(img, "Hello", 700, 600)
+	_put(img, "World", 1200, 950)
+	first = {wd["text"]: wd for line in reusing.recognize(img) for wd in line}
+	assert set(first) == {"Settings", "Hello", "World"}
+	reusing.runs.update(strips=0, lines=0)
+	# Changed in place: the engine must have kept its own copy, or the change would go unseen.
+	cv2.rectangle(img, (1190, 900), (1500, 970), (255, 255, 255), -1)
+	_put(img, "Cancel", 1200, 950)
+	second = {wd["text"]: wd for line in reusing.recognize(img) for wd in line}
+	assert set(second) == {"Settings", "Hello", "Cancel"}
+	# Only the bottom strip went through the detector, only the changed line through the recognizer.
+	assert reusing.runs == {"strips": 1, "lines": 1}
+	# Unchanged words are exactly as before, positions too.
+	assert second["Settings"] == first["Settings"]
+	assert second["Hello"] == first["Hello"]
+
+
+def test_reuse_small_image(reusing):
+	font, scale, thick = cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1
+	img = np.full((24, 120, 3), 240, np.uint8)
+	cv2.putText(img, "Cancel", (2, 18), font, scale, (0, 0, 0), thick, cv2.LINE_AA)
+	first = reusing.recognize(img)
+	assert reusing.recognize(img) == first
+	img[:] = 240
+	cv2.putText(img, "Open", (2, 18), font, scale, (0, 0, 0), thick, cv2.LINE_AA)
+	assert [wd["text"] for line in reusing.recognize(img) for wd in line] == ["Open"]
+
+
+def test_reuse_skips_large_images(reusing, monkeypatch):
+	monkeypatch.setattr(engine, "REUSE_MAX_PIXELS", 100 * 100)
+	reusing.recognize(np.full((200, 200, 3), 255, np.uint8))
+	assert reusing._seen is None
+
+
+def test_changed_groups():
+	old = [
+		(10, 10, 100, 30),  # unchanged; the detector now sees it a pixel apart
+		(10, 50, 200, 70),  # its text changed
+		(300, 200, 400, 220),  # unchanged; the detector now misses it
+		(10, 300, 200, 320),  # "Name: John" becomes "Name: Peter", the detector now splits it in two
+	]
+	new = [
+		(11, 10, 101, 30),
+		(10, 50, 220, 70),
+		(300, 100, 400, 120),  # unchanged pixels, not found before: a detector whim, dropped
+		(10, 300, 90, 320),
+		(100, 300, 210, 320),
+	]
+	diff = np.zeros((400, 500 * 3), np.uint8)
+	diff[55, 3 * 150] = 1
+	diff[310, 3 * 150] = 1
+	assert engine._changed_groups(old, new, diff) == ([0, 2], [1, 3, 4])
+
+
 def test_bgraToBgr():
 	bgr = np.random.default_rng(1).integers(0, 256, (7, 5, 3), dtype=np.uint8)
 	bgra = np.dstack([bgr, np.full((7, 5), 255, np.uint8)])

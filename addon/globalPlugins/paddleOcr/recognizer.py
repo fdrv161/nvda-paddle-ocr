@@ -175,6 +175,9 @@ def _getEngine(key):
 			os.path.join(_MODELS, rec, "inference.onnx"),
 			os.path.join(_MODELS, rec, "inference.yml"),
 			allowed=getattr(engine, charset),
+			# Auto refresh and repeated commands on a screen that changed little or not at all
+			# read only what changed, and unchanged lines are not spoken again as new text.
+			reuse=True,
 		)
 		_engineKey = key
 	return _engine
