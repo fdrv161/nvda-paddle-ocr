@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PLUGIN = ROOT / "addon" / "globalPlugins" / "paddleOcr"
 WHEELS = ROOT / "tmp" / "wheels"
 
-PACKAGES = ("onnxruntime==1.30.0", "numpy==2.5.3", "opencv-python-headless==5.0.0.93")
+PACKAGES = ("onnxruntime==1.30.0", "numpy==2.5.3")
 MODELS = ("det_v6_tiny", "rec_cyrillic_v5", "rec_v6_small")
 MODEL_FILES = ("inference.onnx", "inference.yml")
 # Models with a large dictionary (18.7k characters) get a slim head, see slim_head.py.
@@ -59,9 +59,7 @@ def unpack_wheels():
 	for pkg in PACKAGES:
 		name, version = pkg.split("==")
 		pattern = f"{name.replace('-', '_')}-{version}-*cp313*win_amd64.whl"
-		found = list(WHEELS.glob(pattern)) or list(
-			WHEELS.glob(f"{name.replace('-', '_')}-{version}-*abi3*win_amd64.whl")
-		)
+		found = list(WHEELS.glob(pattern))
 		if not found:
 			raise SystemExit(f"Не найдено колесо {pattern} в {WHEELS}")
 		with zipfile.ZipFile(found[0]) as z:
@@ -85,7 +83,6 @@ def unpack_wheels():
 		"onnxruntime/transformers",
 		"onnxruntime/quantization",
 		"onnxruntime/datasets",
-		"cv2/data",
 	):
 		shutil.rmtree(lib / junk, ignore_errors=True)
 	for d in [d for d in lib.rglob("tests") if d.is_dir()]:
@@ -94,9 +91,6 @@ def unpack_wheels():
 	for pattern in ("*.pyi", "py.typed", "numpy/conftest.py", "numpy/_core/_*_tests.*"):
 		for f in lib.glob(pattern if "/" in pattern else f"**/{pattern}"):
 			f.unlink()
-	# OpenCV needs ffmpeg only for video and loads it only when working with video; it is ~1/4 of cv2.
-	for f in (lib / "cv2").glob("opencv_videoio_ffmpeg*.dll"):
-		f.unlink()
 
 
 def copy_models():

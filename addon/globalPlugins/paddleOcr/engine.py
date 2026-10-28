@@ -9,11 +9,11 @@ Input is a BGR image (numpy, uint8, h×w×3). Output is the screen lines; each l
 a list of words with coordinates in pixels of the same image (NVDA LinesWordsResult format).
 """
 
+import functools
 import itertools
 import math
 from pathlib import Path
 
-import cv2
 import numpy as np
 import onnxruntime as ort
 
@@ -101,7 +101,8 @@ def _yaml_scalar(s):
 	return s
 
 
-def _session(path, threads, oneShot=False):
+def _session(model, threads, oneShot=False):
+	"""A session for a model file, or for the model itself given as bytes."""
 	opts = ort.SessionOptions()
 	opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 	if threads:
@@ -113,7 +114,9 @@ def _session(path, threads, oneShot=False):
 		opts.enable_cpu_mem_arena = False
 		opts.add_session_config_entry("session.intra_op.allow_spinning", "0")
 	opts.log_severity_level = 3
-	return ort.InferenceSession(str(path), sess_options=opts, providers=["CPUExecutionProvider"])
+	if not isinstance(model, bytes):
+		model = str(model)
+	return ort.InferenceSession(model, sess_options=opts, providers=["CPUExecutionProvider"])
 
 
 def _run_options():
@@ -145,6 +148,7 @@ class OcrEngine:
 	def __init__(self, detPath, recPath, recYml, threads=0, allowed=None, reuse=False):
 		self._det = _session(detPath, threads, oneShot=True)
 		self._detInput = self._det.get_inputs()[0].name
+		self._resize = _session(_resize_model(), threads, oneShot=True)
 		self._rec = Reader(recPath, recYml, threads, allowed)
 		self._reuse = reuse
 		self._seen = None
@@ -154,11 +158,12 @@ class OcrEngine:
 		h, w = bgr.shape[:2]
 		# Taken away first: after a failed run the next one starts from scratch.
 		prev, self._seen = self._seen, None
-		diff = None
+		diff = rowsChanged = None
 		if prev is not None and prev.bgr.shape == bgr.shape:
-			# Non-zero where the image changed, the three channels of a pixel side by side.
-			diff = cv2.absdiff(prev.bgr, bgr).reshape(h, w * 3)
-			if not cv2.countNonZero(diff):
+			# True where the image changed, the three channels of a pixel side by side.
+			diff = np.not_equal(prev.bgr, bgr).reshape(h, w * 3)
+			rowsChanged = diff.any(axis=1)
+			if not rowsChanged.any():
 				self._seen = prev
 				return _copy_lines(prev.lines)
 		else:
@@ -173,7 +178,6 @@ class OcrEngine:
 			]
 			boxes = [b for b in boxes if b[2] - b[0] >= 2 and b[3] - b[1] >= 2]
 		else:
-			rowsChanged = None if prev is None else cv2.reduce(diff, 1, cv2.REDUCE_MAX).ravel() > 0
 			boxes, parts = self._detect(bgr, None if prev is None else (rowsChanged, prev.parts))
 		kept = []
 		if prev is not None:
@@ -204,24 +208,29 @@ class OcrEngine:
 		# The model needs sides that are multiples of 32.
 		rh = max(32, round(h * scale / 32) * 32)
 		rw = max(32, round(w * scale / 32) * 32)
-		img = cv2.resize(bgr, (rw, rh)) if (rw, rh) != (w, h) else bgr
+		img = bgr
+		if (rw, rh) != (w, h):
+			sizes = np.array([1, rh, rw, 3], dtype=np.int64)
+			img = self._resize.run(None, {"image": np.ascontiguousarray(bgr)[None], "sizes": sizes})[0][0]
 		sy = h / rh
+		strips = _strips(rh)
+		# One buffer for all strips: a new one for each would make the system zero its pages again.
+		buf = np.empty(3 * max(s1 - s0 for *_own, s0, s1 in strips) * rw, dtype=np.float32)
 		parts = []
-		for k, (top, bottom, s0, s1) in enumerate(_strips(rh)):
+		for k, (top, bottom, s0, s1) in enumerate(strips):
 			if reuse is not None:
 				rowsChanged, oldParts = reuse
 				# The rows of the image this strip is resized from; the resize also reads a row past each end.
 				if not rowsChanged[max(0, math.floor(s0 * sy) - 1) : math.ceil(s1 * sy) + 1].any():
 					parts.append(oldParts[k])
 					continue
+			x = buf[: 3 * (s1 - s0) * rw].reshape(1, 3, s1 - s0, rw)
 			# (pixel/255 - mean)/std per channel straight into the 1×3×h×w layout: no intermediate float
 			# copies of the whole image, which is noticeable on a 1080p screen.
-			x = np.empty((1, 3, s1 - s0, rw), dtype=np.float32)
 			for c in range(3):
 				np.multiply(img[s0:s1, :, c], _DET_SCALE[c], out=x[0, c], dtype=np.float32)
 				x[0, c] -= _DET_SHIFT[c]
 			pred = self._det.run(None, {self._detInput: x})[0][0, 0]
-			del x
 			parts.append((top * sy, bottom * sy, s0 * sy, s1 * sy, _db_boxes(pred, w / rw, sy, w, h, s0)))
 		return _join_strips(parts, DET_OVERLAP / 2 * sy), parts
 
@@ -300,8 +309,7 @@ class Reader:
 			for j, i in enumerate(idx):
 				ch, cw = crops[i].shape[:2]
 				rw = min(batchW, max(1, math.ceil(REC_HEIGHT * cw / ch)))
-				img = cv2.resize(crops[i], (rw, REC_HEIGHT)).astype(np.float32)
-				batch[j, :, :, :rw] = ((img / 255.0 - 0.5) / 0.5).transpose(2, 0, 1)
+				_line_input(crops[i], rw, batch[j, :, :, :rw])
 				widths.append(rw)
 			last = n == 0
 			feeds = {self._recInput: batch, **self._keepFeeds}
@@ -591,9 +599,156 @@ def _script(c):
 
 def _add_margin(bgr, pad):
 	"""The image with a margin in its background colour (the median of the edge pixels)."""
+	h, w = bgr.shape[:2]
 	edge = np.concatenate([bgr[0], bgr[-1], bgr[:, 0], bgr[:, -1]])
-	color = [int(v) for v in np.median(edge, axis=0)]
-	return cv2.copyMakeBorder(bgr, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=color)
+	out = np.empty((h + 2 * pad, w + 2 * pad, 3), dtype=np.uint8)
+	out[:] = np.median(edge, axis=0).astype(np.uint8)
+	out[pad : pad + h, pad : pad + w] = bgr
+	return out
+
+
+def _taps(src, dst, channels=0, scale=1.0):
+	"""A bilinear resize of src samples to dst as OpenCV's INTER_LINEAR does it (pixel centres aligned,
+	the edge sample repeated): out[k] = (a[i0[k]] * w0[k] + a[i1[k]] * w1[k]) * scale.
+
+	With channels, the indices are for rows of interleaved pixels (bgrbgr...), one row of them per channel
+	(channels x dst), so picking them gives the channels apart.
+	"""
+	# Few numpy calls: this runs for every line, and on short lines the calls cost more than the work.
+	pos = np.arange(dst) * (src / dst)
+	pos += 0.5 * src / dst - 0.5
+	np.clip(pos, 0, src - 1, out=pos)
+	i0 = pos.astype(np.intp)
+	pos -= i0
+	w1 = np.multiply(pos, scale, dtype=np.float32)
+	w0 = np.subtract(np.float32(scale), w1)
+	i1 = i0 + 1
+	np.minimum(i1, src - 1, out=i1)
+	if channels:
+		k = np.arange(channels)[:, None]
+		i0 = i0 * channels + k
+		i1 = i1 * channels + k
+	return i0, i1, w0, w1
+
+
+# Taps for the height of a line, cached: lines of a screen have few heights (the widths are all different,
+# and caching them grew the memory by megabytes). The arrays are read-only.
+@functools.lru_cache(maxsize=256)
+def _line_rows(h):
+	"""Taps from h rows to REC_HEIGHT with the scaling to -1..1 (see _line_input), for h > REC_HEIGHT."""
+	taps = _taps(h, REC_HEIGHT, 0, 1 / 127.5)
+	for a in taps:
+		a.flags.writeable = False
+	return taps
+
+
+@functools.lru_cache(maxsize=64)
+def _line_rows_matrix(h):
+	"""Taps from h rows to REC_HEIGHT as a matrix (REC_HEIGHT rows of two weights), for h <= REC_HEIGHT."""
+	i0, i1, w0, w1 = _taps(h, REC_HEIGHT)
+	m = np.zeros((REC_HEIGHT, h), dtype=np.float32)
+	k = np.arange(REC_HEIGHT)
+	np.add.at(m, (k, i0), w0)
+	np.add.at(m, (k, i1), w1)
+	m.flags.writeable = False
+	return m
+
+
+def _mix(a, taps, axis, out=None):
+	"""One axis of a bilinear resize of a 2-D array (see _taps), as float32 (into out if given)."""
+	i0, i1, w0, w1 = taps
+	if axis == 0:
+		lo, hi, w0, w1 = a[i0], a[i1], w0[:, None], w1[:, None]
+	else:
+		lo, hi = a[:, i0], a[:, i1]
+	# Converted first: numpy multiplies uint8 by float32 several times slower than float32 by float32.
+	lo = lo.astype(np.float32, copy=False)
+	hi = hi.astype(np.float32, copy=False)
+	if out is None:
+		out = lo
+	np.multiply(lo, w0, out=out)
+	hi *= w1
+	out += hi
+	return out
+
+
+def _resize_model():
+	"""A one-operator ONNX model: Resize of a uint8 image (1 x h x w x 3, sizes [1, h', w', 3]),
+	bilinear as OpenCV's INTER_LINEAR does it (pixel centres aligned, edge pixels repeated, no antialiasing).
+
+	For the detector input. Numpy took 3-4 times longer than OpenCV to stretch a window to sides
+	that are multiples of 32; onnxruntime does it about as fast. Written here as protobuf bytes,
+	since the onnx package is not in the add-on (tests check it with that package).
+	"""
+
+	def varint(n):
+		out = bytearray()
+		while n > 0x7F:
+			out.append(n & 0x7F | 0x80)
+			n >>= 7
+		out.append(n)
+		return bytes(out)
+
+	def field(number, value):
+		# Integers as varints (wire type 0), strings and messages length-delimited (wire type 2).
+		if isinstance(value, int):
+			return varint(number << 3) + varint(value)
+		if isinstance(value, str):
+			value = value.encode()
+		return varint(number << 3 | 2) + varint(len(value)) + value
+
+	def tensor(name, elemType, dims):
+		# ValueInfoProto: name, type {tensor_type {elem_type, shape {dim {dim_value or dim_param}}}}.
+		shape = b"".join(field(1, field(1 if isinstance(d, int) else 2, d)) for d in dims)
+		return field(1, name) + field(2, field(1, field(1, elemType) + field(2, shape)))
+
+	def attribute(name, text):
+		return field(1, name) + field(4, text) + field(20, 3)  # type 3: STRING
+
+	uint8, int64 = 2, 7
+	node = (
+		b"".join(field(1, name) for name in ("image", "", "", "sizes"))  # inputs X, roi, scales, sizes
+		+ field(2, "resized")
+		+ field(4, "Resize")
+		+ field(5, attribute("mode", "linear"))
+		+ field(5, attribute("coordinate_transformation_mode", "half_pixel"))
+	)
+	graph = (
+		field(1, node)
+		+ field(2, "resize")
+		+ field(11, tensor("image", uint8, (1, "h", "w", 3)))
+		+ field(11, tensor("sizes", int64, (4,)))
+		+ field(12, tensor("resized", uint8, (1, "rh", "rw", 3)))
+	)
+	# ModelProto: ir_version 8, opset_import {version 18}, graph.
+	return field(1, 8) + field(8, field(2, 18)) + field(7, graph)
+
+
+def _line_input(crop, width, out):
+	"""A line (h x w x 3 uint8) as the recognizer takes it, written into out (3 x REC_HEIGHT x width):
+	resized to REC_HEIGHT x width, (pixel/255 - 0.5)/0.5, channels first.
+
+	The scaling is in the weights of the first step. Picking columns is the slow step, so it runs
+	on whichever is fewer: the rows of the line or the REC_HEIGHT rows of the result. The second step
+	goes channel by channel straight into out: copies over ~1 MB would make the system zero
+	new memory each time, which took longer than the resize itself. Measured on the lines
+	of the test screens: as fast as cv2.resize with the old normalisation, long lines faster.
+	"""
+	h, w = crop.shape[:2]
+	rows = crop.reshape(h, w * 3)
+	if h <= REC_HEIGHT:
+		# Columns of the few rows, then the rows by a matrix product (cheaper than picking rows here).
+		a = _mix(rows.astype(np.float32), _taps(w, width, 3, 1 / 127.5), 1)  # h x 3 x width
+		a -= 1
+		m = _line_rows_matrix(h)
+		for c in range(3):
+			np.matmul(m, a[:, c], out=out[c])
+	else:
+		a = _mix(rows, _line_rows(h), 0).reshape(REC_HEIGHT, w, 3)
+		a -= 1
+		xs = _taps(w, width)
+		for c in range(3):
+			_mix(a[:, :, c], xs, 1, out[c])
 
 
 def _strips(rows):
@@ -728,34 +883,272 @@ def _db_boxes(pred, sx, sy, w, h, top=0):
 	"""Detector probability map → line rectangles (x0, y0, x1, y1) in pixels of the original image.
 
 	top is the row of the map's first row in the detector input (for a strip).
+
+	As PaddleOCR does it with OpenCV (findContours, minAreaRect), in numpy and for all blobs at once:
+	blobs of pixels above DET_THRESH (8-connected), their mean probability, the smallest rotated rectangle
+	around each. Unlike findContours, the border of a hole inside a blob is not a box of its own
+	(it gave a second box inside the blob's box; 1 of 7300 boxes on the test screens).
 	"""
-	bitmap = (pred > DET_THRESH).astype(np.uint8)
-	contours, _hierarchy = cv2.findContours(bitmap, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-	boxes = []
-	for cnt in contours:
-		bx, by, bw, bh = cv2.boundingRect(cnt)
-		if min(bw, bh) < DET_MIN_SIZE:
-			continue
-		# Confidence is the mean probability inside the contour (as in PaddleOCR, fast mode).
-		mask = np.zeros((bh, bw), dtype=np.uint8)
-		cv2.drawContours(mask, [cnt - (bx, by)], -1, 1, -1)
-		if cv2.mean(pred[by : by + bh, bx : bx + bw], mask)[0] < DET_BOX_THRESH:
-			continue
-		# The detector finds the "shrunk" middle of a line; expand it back (unclip).
-		# For a rectangle, distance = area * ratio / perimeter.
-		(cx, cy), (rw, rh), angle = cv2.minAreaRect(cnt)
+	bitmap, rows, c0, c1, comp = _blobs(pred, DET_THRESH)
+	if not len(rows):
+		return []
+	# Sum of probabilities over each run: the map values above the threshold come in run order.
+	lens = c1 - c0
+	runSum = np.add.reduceat(pred[bitmap], np.cumsum(lens) - lens).astype(np.float64)
+	total = np.bincount(comp, weights=runSum)
+	area = np.bincount(comp, weights=lens)
+	_add_holes(pred, rows, c0, c1, comp, total, area)
+	# Confidence is the mean probability inside the blob (as in PaddleOCR, fast mode).
+	mean = total / area
+	# Runs grouped by blob, still top to bottom and left to right inside a blob.
+	order = np.argsort(comp, kind="stable")
+	rows, c0, c1, comp = rows[order], c0[order], c1[order], comp[order]
+	first = np.flatnonzero(_starts(comp))
+	bw = np.maximum.reduceat(c1, first) - np.minimum.reduceat(c0, first)
+	bh = np.maximum.reduceat(rows, first) - rows[first] + 1
+	keep = (np.minimum(bw, bh) >= DET_MIN_SIZE) & (mean >= DET_BOX_THRESH)
+	if not keep.any():
+		return []
+	m = keep[comp]
+	rows, c0, c1, comp = rows[m], c0[m], c1[m], comp[m]
+	cx, cy, rw, rh, ux, uy = _min_area_rect(rows, c0, c1, comp)
+	# The detector finds the "shrunk" middle of a line; expand it back (unclip).
+	# For a rectangle, distance = area * ratio / perimeter.
+	with np.errstate(divide="ignore", invalid="ignore"):
 		d = rw * rh * DET_UNCLIP_RATIO / (2 * (rw + rh))
-		pts = cv2.boxPoints(((cx, cy), (rw + 2 * d, rh + 2 * d), angle))
-		if min(rw, rh) + 2 * d < DET_MIN_SIZE + 2:
-			continue
-		# Text on screen is horizontal, so take an upright rectangle around the rotated one.
-		x0 = max(0, math.floor(pts[:, 0].min() * sx))
-		y0 = max(0, math.floor((pts[:, 1].min() + top) * sy))
-		x1 = min(w, math.ceil(pts[:, 0].max() * sx))
-		y1 = min(h, math.ceil((pts[:, 1].max() + top) * sy))
-		if x1 - x0 >= 2 and y1 - y0 >= 2:
-			boxes.append((x0, y0, x1, y1))
-	return boxes
+	good = (np.minimum(rw, rh) > 0) & (np.minimum(rw, rh) + 2 * d >= DET_MIN_SIZE + 2)
+	# Text on screen is horizontal, so take an upright rectangle around the rotated one:
+	# its half sides along x and y.
+	hu = rw / 2 + d
+	hn = rh / 2 + d
+	ex = np.abs(ux) * hu + np.abs(uy) * hn
+	ey = np.abs(uy) * hu + np.abs(ux) * hn
+	x0 = np.maximum(0, np.floor((cx - ex) * sx))
+	y0 = np.maximum(0, np.floor((cy - ey + top) * sy))
+	x1 = np.minimum(w, np.ceil((cx + ex) * sx))
+	y1 = np.minimum(h, np.ceil((cy + ey + top) * sy))
+	good &= (x1 - x0 >= 2) & (y1 - y0 >= 2)
+	# Last blob first, the order findContours gives: the order of equal lines further on depends on it.
+	boxes = np.stack([x0, y0, x1, y1], axis=1)[good][::-1].astype(np.int64)
+	return [tuple(b) for b in boxes.tolist()]
+
+
+def _starts(*keys):
+	"""For sorted keys: True where a group starts (any key differs from the one before)."""
+	out = np.ones(len(keys[0]), dtype=bool)
+	out[1:] = keys[0][1:] != keys[0][:-1]
+	for key in keys[1:]:
+		out[1:] |= key[1:] != key[:-1]
+	return out
+
+
+def _blobs(pred, thresh):
+	"""8-connected blobs of pixels above thresh as horizontal runs.
+
+	Returns (pred > thresh, then per run: row, first column, column after the last, blob number);
+	runs top to bottom and left to right, blobs numbered in the same order by their first pixel.
+	"""
+	h, w = pred.shape
+	# Rows of the map one after another with a False after each, so a run never goes on to the next row.
+	stride = w + 1
+	flat = np.zeros(h * stride + 1, dtype=bool)
+	bitmap = flat[1:].reshape(h, stride)[:, :w]
+	np.greater(pred, thresh, out=bitmap)
+	edges = np.flatnonzero(flat[1:] != flat[:-1])
+	starts = edges[0::2]
+	ends = edges[1::2]
+	n = len(starts)
+	# The runs of the row above that touch a run, corners too: the ones that end at or after its start
+	# and start at or before its end (in flat positions one row up, so only that row can match).
+	lo = np.searchsorted(ends, starts - stride, "left")
+	hi = np.searchsorted(starts, ends - stride, "right")
+	count = np.maximum(hi - lo, 0)
+	total = int(count.sum())
+	parent = np.arange(n)
+	if total:
+		below = np.repeat(np.arange(n), count)
+		above = np.arange(total) + np.repeat(lo - (np.cumsum(count) - count), count)
+		parent = _union(parent, above, below)
+	roots = np.flatnonzero(parent == np.arange(n))
+	number = np.empty(n, dtype=np.intp)
+	number[roots] = np.arange(len(roots))
+	rows = starts // stride
+	return bitmap, rows, starts - rows * stride, ends - rows * stride, number[parent]
+
+
+def _add_holes(pred, rows, c0, c1, comp, total, area):
+	"""Adds the map values (sum to total, count to area, per blob) of the holes of each blob and of what
+	lies in them: findContours fills the outer border of a blob, so PaddleOCR's mean counts them.
+	Without it a noisy blob full of holes (a picture) got a high mean and became a box.
+
+	The runs are as _blobs returns them.
+	"""
+	# In the top row of a hole two runs of its blob come one after another; most maps have no such row.
+	if not ((rows[1:] == rows[:-1]) & (comp[1:] == comp[:-1])).any():
+		return
+	h, w = pred.shape
+	n = len(rows)
+	stride = w + 1
+	starts = rows * stride + c0
+	ends = rows * stride + c1
+	# Background runs in the flat layout of _blobs: run k is the one before blob run k, the last one
+	# is after the last blob run. Runs that reach a row end (the False column) or start a row,
+	# and all runs of the first and the last row, touch the image border: they are outside.
+	bs = np.concatenate(([0], ends))
+	be = np.append(starts, h * stride)
+	row = bs // stride
+	border = (be - row * stride > w) | (bs == row * stride) | (row == 0) | (row == h - 1)
+	# 4-connected background: the runs of the row above that share a column with a run.
+	lo = np.searchsorted(be, bs - stride, "right")
+	hi = np.searchsorted(bs, be - stride, "left")
+	count = np.maximum(hi - lo, 0)
+	group = np.arange(n + 1)
+	pairs = int(count.sum())
+	if pairs:
+		below = np.repeat(np.arange(n + 1), count)
+		above = np.arange(pairs) + np.repeat(lo - (np.cumsum(count) - count), count)
+		group = _union(group, above, below)
+	outside = np.zeros(n + 1, dtype=bool)
+	outside[group[border]] = True
+	hole = ~outside[group]
+	if not hole.any():
+		return
+	# The blob around a hole is the one left of the hole's first run: the top row of a hole has nothing
+	# else in it. A group is named after its first run, so that run is group - 1 in the blob runs.
+	owner = comp[group - 1]
+	t = np.flatnonzero(hole)
+	lens = be[t] - bs[t]
+	offsets = np.cumsum(lens) - lens
+	first = row[t] * w + bs[t] - row[t] * stride
+	values = pred.ravel()[np.repeat(first - offsets, lens) + np.arange(lens.sum())]
+	np.add.at(total, owner[t], np.add.reduceat(values, offsets))
+	np.add.at(area, owner[t], lens)
+	# A blob in a hole (an island) counts in the blob around the hole. Blobs are numbered by their first
+	# run, an island after the blob around it, so from the last one, islands of islands come first.
+	firstRun = np.flatnonzero(np.concatenate(([True], comp[1:] > np.maximum.accumulate(comp)[:-1])))
+	for b in np.flatnonzero(hole[firstRun])[::-1].tolist():
+		around = owner[firstRun[b]]
+		total[around] += total[b]
+		area[around] += area[b]
+
+
+def _union(parent, a, b):
+	"""Union-find over the pairs (a[k], b[k]) for all pairs at once.
+
+	Every set ends up pointing straight at its smallest member. Each round joins the roots of the pairs
+	still apart (the larger root under the smaller one), then flattens the chains; a few rounds suffice.
+	"""
+	while True:
+		ra = parent[a]
+		rb = parent[b]
+		apart = ra != rb
+		if not apart.any():
+			return parent
+		a, b, ra, rb = a[apart], b[apart], ra[apart], rb[apart]
+		np.minimum.at(parent, np.maximum(ra, rb), np.minimum(ra, rb))
+		while True:
+			up = parent[parent]
+			if np.array_equal(up, parent):
+				break
+			parent = up
+
+
+def _min_area_rect(rows, c0, c1, comp):
+	"""The smallest rotated rectangle around each blob (as cv2.minAreaRect, on pixel centres).
+
+	Runs grouped by blob (comp ascending). Returns arrays per blob: centre x, y, the sides along
+	the direction (ux, uy) and across it. A blob of one line or point gets a side of 0.
+	"""
+	# The hull of a blob is made of the first and last pixel of each of its rows.
+	g = np.flatnonzero(_starts(comp, rows))
+	y = rows[g]
+	xl = c0[g]
+	xr = c1[np.append(g[1:], len(rows)) - 1] - 1
+	gc = comp[g]
+	left = _hull_side(y, xl, gc, 1)
+	right = _hull_side(y, xr, gc, -1)
+	# The hull of each blob: its left side top to bottom, then its right side bottom to top.
+	hy = np.concatenate((y[left], y[right]))
+	hx = np.concatenate((xl[left], xr[right]))
+	hc = np.concatenate((gc[left], gc[right]))
+	below = 2 * (rows.max() + 1)
+	o = np.lexsort((np.concatenate((y[left], below - y[right])), hc))
+	hy, hx, hc = hy[o], hx[o], hc[o]
+	# A top or bottom row of one pixel is in both sides: drop the repeat (also the last point = the first).
+	dup = ~_starts(hc, hx, hy)
+	start = _starts(hc)
+	firstOf = np.maximum.accumulate(np.where(start, np.arange(len(hc)), 0))
+	end = np.append(start[1:], True)
+	dup |= end & ~start & (hx == hx[firstOf]) & (hy == hy[firstOf])
+	hy, hx, hc = hy[~dup], hx[~dup], hc[~dup]
+	# Blobs with a hull of fewer than 3 points (a line or a point) keep zero sides.
+	out = np.zeros((6, comp[-1] + 1))
+	s = np.flatnonzero(_starts(hc))
+	blob = hc[s]
+	k = np.diff(np.append(s, len(hc)))
+	m = np.repeat(k >= 3, k)
+	hy, hx, hc = hy[m].astype(np.float64), hx[m].astype(np.float64), hc[m]
+	blob, k = blob[k >= 3], k[k >= 3]
+	if not len(blob):
+		return tuple(out)
+	hfirst = np.cumsum(k) - k
+	# Rotating calipers by brute force: each edge of a hull against every point of that hull.
+	# The smallest rectangle has a side along one of the edges.
+	at = np.repeat(np.arange(len(blob)), k)  # hull point -> position of its blob in blob
+	nxt = np.arange(len(hc)) + 1
+	nxt[hfirst + k - 1] = hfirst
+	ex = hx[nxt] - hx
+	ey = hy[nxt] - hy
+	length = np.hypot(ex, ey)
+	ux = ex / length
+	uy = ey / length
+	per = k[at]
+	edge = np.repeat(np.arange(len(hc)), per)
+	block = np.cumsum(per) - per
+	point = hfirst[at[edge]] + np.arange(len(edge)) - block[edge]
+	along = ux[edge] * hx[point] + uy[edge] * hy[point]
+	across = ux[edge] * hy[point] - uy[edge] * hx[point]
+	amax, amin = np.maximum.reduceat(along, block), np.minimum.reduceat(along, block)
+	cmax, cmin = np.maximum.reduceat(across, block), np.minimum.reduceat(across, block)
+	area = (amax - amin) * (cmax - cmin)
+	# Of rectangles with the same area (small round blobs), the most slanted one: OpenCV mostly picks it
+	# (its float rounding makes the slanted area a little smaller), and so the boxes stay as they were.
+	smallest = np.minimum.reduceat(area, hfirst)[at]
+	slant = np.where(area <= smallest * (1 + 1e-9) + 1e-9, -np.maximum(np.abs(ux), np.abs(uy)), -2)
+	best = np.lexsort((slant, at))[hfirst + k - 1]
+	ux, uy = ux[best], uy[best]
+	along = (amax[best] + amin[best]) / 2
+	across = (cmax[best] + cmin[best]) / 2
+	# The centre back from (along, across) to (x, y): across is along (-uy, ux).
+	out[:, blob] = (
+		ux * along - uy * across,
+		uy * along + ux * across,
+		amax[best] - amin[best],
+		cmax[best] - cmin[best],
+		ux,
+		uy,
+	)
+	return tuple(out)
+
+
+def _hull_side(y, x, chain, side):
+	"""Indices of the points that make the left (side=1) or right (side=-1) side of a convex hull,
+	for many chains at once. A chain has one point per row, top to bottom.
+
+	Points that are not strictly outside the line between their neighbours are dropped, all such points
+	in a round (each lies inside the hull either way), until none are left.
+	"""
+	idx = np.arange(len(y))
+	while len(idx) >= 3:
+		a, b, c = idx[:-2], idx[1:-1], idx[2:]
+		cross = (x[b] - x[a]) * (y[c] - y[a]) - (x[c] - x[a]) * (y[b] - y[a])
+		drop = (chain[a] == chain[c]) & (cross * side >= 0)
+		if not drop.any():
+			break
+		keep = np.ones(len(idx), dtype=bool)
+		keep[1:-1] = ~drop
+		idx = idx[keep]
+	return idx
 
 
 def _stacked(a, b):

@@ -91,7 +91,7 @@ _runLock = threading.Lock()
 # a new one, and a new one does not wait longer than this for the old one (a running model cannot
 # be stopped; its result is dropped).
 STUCK_AFTER = 30
-# Where numpy, cv2 and onnxruntime came from is logged once per NVDA session.
+# Where numpy and onnxruntime came from is logged once per NVDA session.
 _libsLogged = False
 
 
@@ -123,9 +123,9 @@ def _checkRuntime():
 
 
 def _logLibraries(lib):
-	# numpy, cv2 and onnxruntime are shared top-level modules in NVDA: if another add-on loaded its own copy
+	# numpy and onnxruntime are shared top-level modules in NVDA: if another add-on loaded its own copy
 	# first, that copy is used. Logged so such a conflict can be found.
-	for name in ("numpy", "cv2", "onnxruntime"):
+	for name in ("numpy", "onnxruntime"):
 		module = sys.modules.get(name)
 		path = getattr(module, "__file__", None) or "?"
 		log.debug(f"Paddle OCR: {name} {getattr(module, '__version__', '?')} from {path}")
@@ -134,7 +134,7 @@ def _logLibraries(lib):
 
 
 def _importEngine():
-	"""Imports engine.py with numpy, cv2 and onnxruntime from the add-on lib/ folder."""
+	"""Imports engine.py with numpy and onnxruntime from the add-on lib/ folder."""
 	lib = os.path.join(_DIR, "lib")
 	# Append rather than prepend: NVDA's own modules must not be shadowed by ours.
 	if lib not in sys.path:
@@ -144,19 +144,17 @@ def _importEngine():
 	if "onnxruntime" not in sys.modules:
 		_checkRuntime()
 	# numpy's OpenBLAS starts a thread per CPU core and reserves ~30 MB for each (~0.5 GB and 15 threads
-	# on 16 cores). The engine does no matrix math in numpy, so load it single-threaded.
-	# cv2 prepends a non-existent folder to PATH for good; cv2.pyd needs only system DLLs.
-	# Both are restored right away, so processes started by NVDA later do not inherit them.
-	saved = {name: os.environ.get(name) for name in ("OPENBLAS_NUM_THREADS", "PATH")}
+	# on 16 cores). The engine's matrix products are small (resizing text lines), so load it single-threaded.
+	# Restored right away, so processes started by NVDA later do not inherit it.
+	saved = os.environ.get("OPENBLAS_NUM_THREADS")
 	os.environ["OPENBLAS_NUM_THREADS"] = "1"
 	try:
 		from . import engine
 	finally:
-		for name, value in saved.items():
-			if value is None:
-				os.environ.pop(name, None)
-			else:
-				os.environ[name] = value
+		if saved is None:
+			os.environ.pop("OPENBLAS_NUM_THREADS", None)
+		else:
+			os.environ["OPENBLAS_NUM_THREADS"] = saved
 	if not _libsLogged:
 		_libsLogged = True
 		_logLibraries(lib)

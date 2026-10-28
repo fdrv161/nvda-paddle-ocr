@@ -87,11 +87,11 @@ What I did:
 
 Bug reports and suggestions: [Issues](https://github.com/fdrv161/nvda-paddle-ocr/issues).
 
-Built on [NVDA](https://www.nvaccess.org/), [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), [ONNX Runtime](https://github.com/microsoft/onnxruntime), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
+Built on [NVDA](https://www.nvaccess.org/), [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), [ONNX Runtime](https://github.com/microsoft/onnxruntime) and [NumPy](https://numpy.org/).
 
-The add-on code is distributed under [GPL v2 or later](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html), PaddleOCR models and OpenCV under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0), onnxruntime under [MIT](https://opensource.org/licenses/MIT), NumPy under [BSD](https://opensource.org/licenses/BSD-3-Clause).
+The add-on code is distributed under [GPL v2 or later](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html), PaddleOCR models under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0), onnxruntime under [MIT](https://opensource.org/licenses/MIT), NumPy under [BSD](https://opensource.org/licenses/BSD-3-Clause).
 
-Library versions included in the add-on: onnxruntime 1.30.0, NumPy 2.5.3, opencv-python-headless 5.0.0.93, from PyPI. Their files are not modified; only parts not needed for recognition, such as tests and type hints, are left out. Where each file was taken from is described in the Third-party components section below.
+Library versions included in the add-on: onnxruntime 1.30.0 and NumPy 2.5.3, from PyPI. Their files are not modified; only parts not needed for recognition, such as tests and type hints, are left out. Where each file was taken from is described in the Third-party components section below.
 
 ## For developers
 
@@ -106,6 +106,8 @@ python -m venv .venv
 .venv/Scripts/python tools/fetch_libs.py
 .venv/Scripts/python tools/build_addon.py
 ```
+
+OpenCV is needed only by the tests and `tools/bench.py` (they compare with it and draw test images); the add-on does not include it.
 
 The add-on appears in the repository root as `paddleOcr-<version>.nvda-addon`. Tests (they need the models downloaded above):
 
@@ -123,9 +125,8 @@ Pushing to `main` without a tag publishes nothing.
 
 ### Third-party components
 
-The add-on's `lib/` and `models/` folders are not stored in git. `tools/fetch_libs.py` and `tools/fetch_models.py` download them from the official sources below, with pinned versions, so running these two scripts rebuilds the same folders. Files are copied unchanged, except one model (see below); only parts not needed at runtime are left out: tests and test modules, type hints, C headers, NumPy's f2py, onnxruntime tools, OpenCV data files and the OpenCV ffmpeg video library. Licenses of the libraries go into the package with them.
+The add-on's `lib/` and `models/` folders are not stored in git. `tools/fetch_libs.py` and `tools/fetch_models.py` download them from the official sources below, with pinned versions, so running these two scripts rebuilds the same folders. Files are copied unchanged, except one model (see below); only parts not needed at runtime are left out: tests and test modules, type hints, C headers, NumPy's f2py, onnxruntime tools. Licenses of the libraries go into the package with them.
 
 * **onnxruntime 1.30.0** (MIT), PyPI wheel `onnxruntime-1.30.0-cp313-cp313-win_amd64.whl`. Binaries: `onnxruntime.dll`, `onnxruntime_providers_shared.dll`, `onnxruntime_pybind11_state.pyd`. Licenses: `lib/onnxruntime/LICENSE`, `ThirdPartyNotices.txt`.
 * **NumPy 2.5.3** (BSD-3-Clause), PyPI wheel `numpy-2.5.3-cp313-cp313-win_amd64.whl`. Binaries: the `.pyd` modules of NumPy and, in `numpy.libs`, OpenBLAS (`libscipy_openblas64_*.dll`) and the Microsoft C++ runtime (`msvcp140-*.dll`) that NumPy ships. Licenses: `lib/licenses/numpy/`.
-* **opencv-python-headless 5.0.0.93** (Apache 2.0), PyPI wheel `opencv_python_headless-5.0.0.93-cp37-abi3-win_amd64.whl`. Binary: `cv2.pyd`. Licenses: `lib/cv2/LICENSE.txt`, `LICENSE-3RD-PARTY.txt`.
 * **PaddleOCR models** (Apache 2.0) `det_v6_tiny`, `rec_v6_small`, `rec_cyrillic_v5`: ONNX files from the [PaddlePaddle organization on Hugging Face](https://huggingface.co/PaddlePaddle). Repository names and SHA-256 hashes are in `models/manifest.json`; the license is in `addon/licenses/PaddleOCR-models.txt`. `det_v6_tiny` and `rec_cyrillic_v5` are included unchanged. **`rec_v6_small` is modified:** `tools/slim_head.py` rebuilds its last layer so that it returns only the characters the add-on allows (about 760 of 18,700), computing the same probabilities in parts to use less memory; the rest of the model and its weights are unchanged.

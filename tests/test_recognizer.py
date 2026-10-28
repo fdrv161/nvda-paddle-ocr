@@ -483,7 +483,6 @@ def test_all_cyrillic_setting_rebuilds_only_cyrillic(rec):
 def test_library_outside_addon_is_logged(rec, monkeypatch):
 	lib = str(PLUGIN / "lib")
 	monkeypatch.setitem(sys.modules, "numpy", _module("numpy", __file__=f"{lib}/numpy/__init__.py"))
-	monkeypatch.setitem(sys.modules, "cv2", _module("cv2", __file__=f"{lib}/cv2/__init__.py"))
 	monkeypatch.setitem(
 		sys.modules, "onnxruntime", _module("onnxruntime", __file__="C:/other/onnxruntime/__init__.py")
 	)
