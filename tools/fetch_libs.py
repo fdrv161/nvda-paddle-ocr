@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PLUGIN = ROOT / "addon" / "globalPlugins" / "paddleOcr"
 WHEELS = ROOT / "tmp" / "wheels"
 
-PACKAGES = ("onnxruntime==1.30.0", "numpy==2.5.3")
+PACKAGES = ("onnxruntime==1.31.1", "numpy==2.5.4")
 MODELS = ("det_v6_tiny", "rec_cyrillic_v5", "rec_v6_small")
 MODEL_FILES = ("inference.onnx", "inference.yml")
 # Models with a large dictionary (18.7k characters) get a slim head, see slim_head.py.
